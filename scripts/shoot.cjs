@@ -29,7 +29,11 @@ const port = 5180 + Math.floor(Math.random() * 100);
         await page.getByRole('button', { name: /sample data/i }).first().click();
         await page.waitForSelector('[data-ready]', { timeout: 10000 });
       }
-      await page.waitForTimeout(reduced ? 300 : 2600);
+      // Scroll through so scroll-triggered reveals fire, then return to top.
+      const height = await page.evaluate(() => document.body.scrollHeight);
+      for (let y = 0; y < height; y += Math.round(h * 0.7)) { await page.evaluate((v) => window.scrollTo(0, v), y); await page.waitForTimeout(120); }
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await page.waitForTimeout(reduced ? 300 : 2000);
       const file = path.join(outDir, `${name}-${w}.png`);
       await page.screenshot({ path: file, fullPage: true });
       console.log(`saved ${path.relative(process.cwd(), file)}`);

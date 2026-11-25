@@ -15,7 +15,7 @@ mkdirSync(dist, { recursive: true });
 for (const e of ENTRIES) {
   const from = join(root, e);
   if (!existsSync(from)) continue;
-  const to = e === 'public' ? dist : join(dist, e);
+  const to = join(dist, e);
   mkdirSync(dirname(to), { recursive: true });
   cpSync(from, to, { recursive: true, filter: (p) => !p.endsWith('.test.js') && !p.includes('/core/__') });
 }
