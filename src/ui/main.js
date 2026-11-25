@@ -5,6 +5,7 @@ import * as views from './views.js';
 import * as store from './store.js';
 import { animateIn, installTooltip } from './motion.js';
 import { RideMap, mapSection } from './map.js';
+import { cardSection, mountCard } from './card.js';
 
 /** @typedef {import('../core/types.js').Trip} Trip */
 
@@ -47,6 +48,11 @@ function showDashboard(o) {
     slot.outerHTML = mapSection(state.stats);
     map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats);
   } else slot?.remove();
+  const before = app.querySelector('.note-honest');
+  if (before) {
+    before.insertAdjacentHTML('beforebegin', cardSection(state.stats));
+    mountCard(/** @type {HTMLElement} */ (app.querySelector('.share-card')), state.trips, { names: state.names, unit: state.unit });
+  }
   app.setAttribute('data-ready', '');
   if (o.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
   animateIn(app, { animate: o.animate });

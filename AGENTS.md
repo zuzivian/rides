@@ -27,7 +27,7 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   format.js           number, money and date formatting
   types.js            JSDoc typedefs (Trip, ParseResult)
   mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
-src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay),
+src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), card.js (share card PNG),
                       motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css
 data/sample-trips.csv synthetic rider, about 300 trips, May 2025 – Oct 2026
 scripts/              gen-sample, serve (static dev server), build (copy and verify)

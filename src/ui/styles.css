@@ -310,3 +310,16 @@ body.dragging .drop { border-color: var(--sodium); background: var(--sodium-dim)
 .pp-links { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 14px; }
 .pp-links .eyebrow { width: 100%; margin-bottom: 2px; }
 .map-card > .foot { padding: 0 18px 18px; }
+
+/* Share card ----------------------------------------------------------------- */
+.share-grid { display: grid; gap: 22px; }
+@media (min-width: 900px) { .share-grid { grid-template-columns: minmax(0, 1fr) 340px; align-items: center; gap: 48px; } }
+.share-copy h2 { font-size: clamp(24px, 4vw, 34px); letter-spacing: -.03em; margin-bottom: 10px; }
+.share-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin: 20px 0 6px; }
+.toggle { display: inline-flex; align-items: center; gap: 10px; font-size: 14px; cursor: pointer; user-select: none; }
+.toggle input { appearance: none; width: 42px; height: 24px; border-radius: 12px; background: var(--ink-3); border: 1px solid var(--line); position: relative; cursor: pointer; transition: background .2s; margin: 0; }
+.toggle input::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--muted); transition: transform .2s var(--ease), background .2s; }
+.toggle input:checked { background: var(--sodium-dim); border-color: var(--sodium); }
+.toggle input:checked::after { transform: translateX(18px); background: var(--sodium); }
+.share-preview { display: flex; justify-content: center; }
+.share-preview canvas { width: min(100%, 340px); height: auto; aspect-ratio: 9 / 16; border-radius: 22px; box-shadow: 0 30px 80px rgba(0, 0, 0, .55), 0 0 0 1px var(--line); background: var(--ink-0); }
