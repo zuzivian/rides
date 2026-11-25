@@ -50,8 +50,8 @@ export function landing(o = {}) {
         <label class="btn btn-primary" for="file">Choose your export</label>
         <button class="btn" type="button" data-action="sample">Try with sample data</button>
       </div>
-      <input id="file" class="sr-only" type="file" accept=".csv,text/csv" multiple>
-      <div class="drop">Or drop your <code>trips_data.csv</code> anywhere on this page</div>
+      <input id="file" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple>
+      <div class="drop">Or drop your <code>trips_data.csv</code>, or receipt emails (<code>.eml</code> / <code>.mbox</code>), anywhere on this page</div>
       <ul class="promises">
         <li>Parsed in your browser. No server, no account, no analytics.</li>
         <li>The map is drawn from your rides alone. No map tiles, no third-party requests.</li>
@@ -73,6 +73,14 @@ export function landing(o = {}) {
           <li>Open Lyft’s privacy settings in the app or on lyft.com.</li>
           <li>Choose <b>Download your data</b> and wait for the email.</li>
           <li>Load the ride history CSV from the download.</li>
+        </ol>
+      </details>
+      <details>
+        <summary>Using receipt emails instead</summary>
+        <ol>
+          <li>In your mail app, select your Uber or Lyft receipt emails and save or export them as <code>.eml</code> files. Gmail and Apple Mail can do this. You can also use an <code>.mbox</code> export, such as Google Takeout with a label.</li>
+          <li>Drop them here. They’re read on this device, and only trip times, addresses, distance, fare and ride type are kept. Names and card digits are ignored.</li>
+          <li>Receipts don’t include coordinates, so those rides appear in the stats but not on the map. You can load them with your export, and duplicates are dropped.</li>
         </ol>
       </details>
       <details>
@@ -119,7 +127,9 @@ export function dashboard(s, ctx) {
 
     <section class="tiles span-12 reveal" aria-label="Totals">
       ${tile('Distance', `<span data-count="${distV.toFixed(1)}" data-dec="0">${fmt.int(distV)}</span><span class="u">${unit}</span>`, s.kmKnown < s.count ? `${s.count - s.kmKnown} rides without distance` : `${fmt.distance(s.km / s.count, unit)} on average`)}
-      ${tile('In the car', `<span data-count="${hours.toFixed(1)}" data-dec="0">${fmt.int(hours)}</span><span class="u">hours</span>`, `${(hours / 24).toFixed(1)} days`)}
+      ${hours >= 2
+    ? tile('In the car', `<span data-count="${hours.toFixed(1)}" data-dec="0">${fmt.int(hours)}</span><span class="u">hours</span>`, hours >= 24 ? `${(hours / 24).toFixed(1)} days` : `${fmt.duration(s.minutes / Math.max(1, s.minutesKnown))} per ride`)
+    : tile('In the car', `<span data-count="${Math.round(s.minutes)}">${fmt.int(s.minutes)}</span><span class="u">min</span>`, s.minutesKnown ? `${fmt.duration(s.minutes / s.minutesKnown)} per ride` : 'no dropoff times')}
       ${tile('Spent', primary ? `<span data-count="${primary.total.toFixed(2)}" data-money="${esc(primary.currency)}">${esc(fmt.money(primary.total, primary.currency, { compact: true }))}</span>` : '—',
         otherSpend.length ? `+ ${otherSpend.map((o) => esc(fmt.money(o.total, o.currency, { compact: true }))).join(', ')}` : primary ? `${esc(fmt.money(primary.total / primary.count, primary.currency))} a ride` : 'No fares in this file')}
       ${tile('Places', `<span data-count="${s.places.length}">${s.places.length}</span>`, `${fmt.plural(s.cities.filter((c) => c.name !== 'Unknown').length || 1, 'city', 'cities')}`)}

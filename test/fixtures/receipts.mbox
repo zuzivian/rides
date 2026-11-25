@@ -1,0 +1,69 @@
+From sender@example.com Thu Mar 12 19:31:07 2026
+Return-Path: <noreply@uber.com>
+From: "Uber Receipts" <noreply@uber.com>
+To: rider@example.com
+Subject: =?UTF-8?Q?Your_Thursday_evening_trip_with_Uber?=
+Date: Thu, 12 Mar 2026 19:31:07 -0700
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1_example"
+
+--b1_example
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Thanks for riding, Sam
+We hope you enjoyed your ride this evening.
+
+Total $24.86
+Trip fare $19.12
+Booking Fee $3.25
+Visa =E2=80=A2=E2=80=A2=E2=80=A2=E2=80=A2 4242 $24.86
+
+March 12, 2026
+UberX 3.94 miles | 21 min
+7:02 PM | 500 Howard St, San Francisco, CA 94105, US
+7:23 PM | 1200 9th Ave, San Francisco, CA 94122, US
+
+--b1_example
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><table><tr><td>Total</td><td>$24.86</td></tr></table></body></html>
+--b1_example--
+
+From sender@example.com Thu Mar 12 19:31:07 2026
+From: Uber <uber@uber.com>
+Subject: 20% off Uber Eats this weekend
+Date: Fri, 13 Mar 2026 09:00:00 -0700
+Content-Type: text/plain
+
+Hungry? Order now and save. Total savings up to $10.00.
+
+From sender@example.com Thu Mar 12 19:31:07 2026
+From: friend@example.com
+Subject: dinner?
+Date: Fri, 13 Mar 2026 10:00:00 -0700
+Content-Type: text/plain
+
+see you at 7:30 PM at 800 Valencia St
+
+From sender@example.com Thu Mar 12 19:31:07 2026
+From: Lyft Ride Receipt <no-reply@lyftmail.com>
+To: rider@example.com
+Subject: Your ride with Jordan on April 2
+Date: Thu, 02 Apr 2026 06:20:44 -0700
+MIME-Version: 1.0
+Content-Type: text/html; charset=utf-8
+Content-Transfer-Encoding: base64
+
+PGh0bWw+PGhlYWQ+PHN0eWxlPi54e2NvbG9yOnJlZH08L3N0eWxlPjwvaGVhZD48Ym9keT4KPGgx
+PlRoYW5rcyBmb3IgcmlkaW5nIHdpdGggSm9yZGFuITwvaDE+CjxwPlJpZGUgb24gQXByaWwgMiwg
+MjAyNjwvcD4KPHRhYmxlPgo8dHI+PHRkPkx5ZnQgWEwgZmFyZSAoMTIuNDBtaSwgMjRtIDEwcyk8
+L3RkPjx0ZD4kMzguMjA8L3RkPjwvdHI+Cjx0cj48dGQ+QWlycG9ydCBzdXJjaGFyZ2U8L3RkPjx0
+ZD4kNS41MDwvdGQ+PC90cj4KPHRyPjx0ZD48Yj5Ub3RhbCBjaGFyZ2VkPC9iPjwvdGQ+PHRkPjxi
+PiQ0Ni43MTwvYj48L3RkPjwvdHI+Cjx0cj48dGQ+VmlzYSAqMTExMTwvdGQ+PHRkPiQ0Ni43MTwv
+dGQ+PC90cj4KPC90YWJsZT4KPGRpdj5QaWNrdXAgNTo0OCBBTTwvZGl2PjxkaXY+MTIwMCA5dGgg
+QXZlLCBTYW4gRnJhbmNpc2NvLCBDQTwvZGl2Pgo8ZGl2PkRyb3Atb2ZmIDY6MTIgQU08L2Rpdj48
+ZGl2PlNhbiBGcmFuY2lzY28gSW50ZXJuYXRpb25hbCBBaXJwb3J0IChTRk8pLCBUZXJtaW5hbCAy
+LCBTYW4gRnJhbmNpc2NvLCBDQTwvZGl2Pgo8L2JvZHk+PC9odG1sPg==
+

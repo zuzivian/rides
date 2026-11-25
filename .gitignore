@@ -6,3 +6,4 @@ dist/
 private/
 *.mbox
 /screenshots/tmp/
+!test/fixtures/*.mbox
