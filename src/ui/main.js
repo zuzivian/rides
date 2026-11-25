@@ -4,6 +4,7 @@ import { computeStats } from '../core/stats.js';
 import * as views from './views.js';
 import * as store from './store.js';
 import { animateIn, installTooltip } from './motion.js';
+import { RideMap, mapSection } from './map.js';
 
 /** @typedef {import('../core/types.js').Trip} Trip */
 
@@ -20,10 +21,14 @@ const state = {
   /** @type {ReturnType<typeof computeStats>} */ stats: null,
 };
 
+/** @type {RideMap|null} */
+let map = null;
+
 const SOURCE_LABEL = { uber: 'Uber export', lyft: 'Lyft export', generic: 'Ride history', email: 'Receipt emails' };
 
 function showLanding(error = '') {
   state.stats = null;
+  map?.destroy(); map = null;
   app.removeAttribute('data-ready');
   app.innerHTML = views.landing({ error });
   window.scrollTo(0, 0);
@@ -35,7 +40,13 @@ function showDashboard(o) {
   const y = window.scrollY;
   state.stats = computeStats(state.trips, { names: state.names, unit: state.unit });
   if (!state.stats) { showLanding('No rides to show.'); return; }
+  map?.destroy(); map = null;
   app.innerHTML = views.dashboard(state.stats, { source: state.source, unit: state.unit, allPlaces: state.allPlaces, warnings: state.warnings });
+  const slot = app.querySelector('#map-slot');
+  if (slot && state.stats.places.length) {
+    slot.outerHTML = mapSection(state.stats);
+    map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats);
+  } else slot?.remove();
   app.setAttribute('data-ready', '');
   if (o.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
   animateIn(app, { animate: o.animate });
