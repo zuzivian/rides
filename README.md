@@ -13,7 +13,7 @@ This is a web prototype. The plan is to turn it into an iPhone app later (see [d
 - **Trends:** a year-over-year comparison, price per mile over time, and your product mix (UberX, Comfort, XL and so on)
 - **Travel:** airport runs, cities visited, and average wait for pickup when your export includes request times
 - **A map** of every ride as an arc (brighter for routes you ride more), a replay of your year with a date ticker, and tap-a-place details
-- **A share card**, 1080×1920 PNG, with no names or addresses by default *(slice 4)*
+- **A share card**: a 1080×1920 "my year in rides" PNG with totals and a mini map, drawn on your device. Names and addresses are left out unless you turn on place nicknames
 
 All stats count **rides on your account**. Rides that friends booked for you aren't in your export, so they aren't counted.
 
