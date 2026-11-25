@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.DS_Store
+*.log
+# Never commit real exports. Put yours here to test locally.
+private/
+*.mbox
+/screenshots/tmp/
