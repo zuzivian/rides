@@ -4,7 +4,7 @@
 import { project, unproject, arcControl, quadAt, quadSplit, robustBounds, metresPerWorldUnit } from '../core/mercator.js';
 import * as fmt from '../core/format.js';
 import { reducedMotion } from './motion.js';
-import { esc } from './views.js';
+import { esc } from './esc.js';
 
 /** @typedef {import('../core/stats.js').Stats} Stats */
 /** @typedef {import('../core/stats.js').TripView} TripView */
@@ -21,17 +21,14 @@ const memo = {
   speed: 1,
 };
 
-/** @param {Stats} s */
-export function mapSection(s) {
+/** @param {Stats} s @param {string} [overlay] HTML laid over the map (hero mode) */
+export function mapSection(s, overlay = '') {
   const years = s.years.map((y) => y.year);
   const cities = s.cities.filter((c) => c.name !== 'Unknown');
   return `
-  <section class="card map-card span-12 reveal" aria-labelledby="h-map">
-    <div class="map-head">
-      <div><div class="eyebrow">Map</div><h2 id="h-map">Every ride, as an arc</h2></div>
-      ${cities.length > 1 ? `<div class="chips" role="group" aria-label="Jump to city">${cities.map((c) => `<button type="button" class="chip" data-city="${esc(c.name)}">${esc(c.name)} <span>${c.count}</span></button>`).join('')}</div>` : ''}
-    </div>
+  <section class="map-card${overlay ? ' map-hero' : ' card span-12'} reveal" aria-label="Map of every ride">
     <div class="map-stage">
+      ${overlay ? `<div class="map-overlay">${overlay}</div>` : ''}
       <canvas class="map-canvas" tabindex="0" role="img" aria-label="Map of your rides. Drag to pan, scroll or pinch to zoom, tap a light for details. Arrow keys pan, plus and minus zoom."></canvas>
       <div class="ticker" aria-live="polite" hidden><div class="t-date"></div><div class="t-meta"></div></div>
       <div class="zoom" role="group" aria-label="Zoom">
@@ -40,7 +37,7 @@ export function mapSection(s) {
         <button type="button" data-zoom="fit" aria-label="Fit all rides">⤢</button>
       </div>
     </div>
-    <div class="replay">
+    <div class="replay${overlay ? ' wrap' : ''}">
       <button type="button" class="btn btn-primary btn-small play" data-replay>▶ Replay ${years.length === 1 ? 'my year' : 'my rides'}</button>
       ${years.length > 1 ? `<div class="seg" role="group" aria-label="Replay period">
         <button type="button" data-year="all" aria-pressed="${memo.year === 'all'}">All</button>
@@ -51,9 +48,10 @@ export function mapSection(s) {
         <button type="button" data-speed="3" aria-pressed="${memo.speed === 3}">3×</button>
       </div>
       <input class="scrub" type="range" min="0" max="1000" value="1000" aria-label="Replay position">
+      ${cities.length > 1 ? `<div class="chips" role="group" aria-label="Jump to city">${cities.map((c) => `<button type="button" class="chip" data-city="${esc(c.name)}">${esc(c.name)} <span>${c.count}</span></button>`).join('')}</div>` : ''}
     </div>
-    <div class="place-panel" aria-live="polite"></div>
-    <p class="foot">Brighter arcs are routes you ride more often. Lights are your places, sized by visits. No map tiles are loaded, so the map makes no network requests at all.</p>
+    <div class="place-panel${overlay ? ' wrap-inset' : ''}" aria-live="polite"></div>
+    <p class="foot${overlay ? ' wrap' : ''}">Brighter arcs are routes you ride more often. Lights are your places, sized by visits. No map tiles are loaded, so the map makes no network requests at all.</p>
   </section>`;
 }
 
@@ -131,10 +129,14 @@ export class RideMap {
 
   /** @param {{minX:number,maxX:number,minY:number,maxY:number}} b */
   camFor(b) {
-    const pad = Math.min(56, this.w * 0.1);
+    const hero = this.root.classList.contains('map-hero');
+    const side = Math.min(56, this.w * 0.1);
+    const top = hero ? Math.min(210, this.h * 0.3) : side; const bottom = hero ? 96 : side;
     const bw = Math.max(b.maxX - b.minX, 2e-6); const bh = Math.max(b.maxY - b.minY, 2e-6);
-    const z = Math.min((this.w - pad * 2) / bw, (this.h - pad * 2) / bh, MAX_Z / 4);
-    return { cx: (b.minX + b.maxX) / 2, cy: (b.minY + b.maxY) / 2, z };
+    const z = Math.min((this.w - side * 2) / bw, (this.h - top - bottom) / bh, MAX_Z / 4);
+    // Shift the centre so the data sits in the clear area between the overlays.
+    const cy = (b.minY + b.maxY) / 2 - ((top - bottom) / 2) / z;
+    return { cx: (b.minX + b.maxX) / 2, cy, z };
   }
 
   /** @param {string|undefined} name @param {boolean} animate */
@@ -308,7 +310,7 @@ export class RideMap {
     const spanDays = Math.max(1, (t1 - t0) / 86400000);
     const duration = Math.max(10000, Math.min(40000, spanDays * 60));
     this.replay = { seq, t0, t1, duration, t: 0, playing: play, last: performance.now(), city: '' };
-    this.ticker.hidden = false;
+    this.ticker.hidden = false; this.stage.classList.add('replaying');
     this.updatePlayLabel();
     this.loop();
   }
@@ -316,7 +318,7 @@ export class RideMap {
   /** @param {boolean} [reset] */
   stopReplay(reset = false) {
     if (!this.replay) return;
-    if (reset) { this.replay = null; this.ticker.hidden = true; this.scrub.value = '1000'; this.updatePlayLabel(); this.draw(); return; }
+    if (reset) { this.replay = null; this.ticker.hidden = true; this.stage.classList.remove('replaying'); this.scrub.value = '1000'; this.updatePlayLabel(); this.draw(); return; }
     this.replay.playing = false; this.updatePlayLabel();
   }
 
@@ -516,7 +518,7 @@ export class RideMap {
     const target = (90 * mpp) / unitM;
     const nice = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000].reduce((best, v) => (Math.abs(v - target) < Math.abs(best - target) ? v : best));
     const px = (nice * unitM) / mpp;
-    const x = 14; const y = h - 16;
+    const x = this.w - px - 60; const y = h - 16;
     ctx.strokeStyle = 'rgba(236, 231, 223, .5)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 5); ctx.stroke();
     ctx.fillStyle = 'rgba(236, 231, 223, .65)'; ctx.font = '10px ui-monospace, SF Mono, Menlo, monospace'; ctx.textBaseline = 'bottom';

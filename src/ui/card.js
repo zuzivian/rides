@@ -86,6 +86,16 @@ function periodOf(t) {
   return new Intl.DateTimeFormat('en-US', { timeZone: t.tz, year: 'numeric' }).format(new Date(t.start));
 }
 
+/**
+ * Render the card off-screen and download it.
+ * @param {Stats} s @param {{period: string, showNames: boolean, unit: 'mi'|'km'}} o
+ */
+export function saveCard(s, o) {
+  const c = document.createElement('canvas'); c.width = CARD_W; c.height = CARD_H;
+  drawCard(/** @type {CanvasRenderingContext2D} */ (c.getContext('2d')), s, o);
+  download(c, o.period);
+}
+
 /** @param {HTMLCanvasElement} canvas @param {string} period */
 function download(canvas, period) {
   canvas.toBlob((blob) => {

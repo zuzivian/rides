@@ -28,6 +28,7 @@ const port = 5180 + Math.floor(Math.random() * 100);
       if (sample) {
         await page.getByRole('button', { name: /sample data/i }).first().click();
         await page.waitForSelector('[data-ready]', { timeout: 10000 });
+        if (await page.locator('.story').count()) { await page.waitForTimeout(1200); await page.keyboard.press('Escape'); await page.waitForTimeout(400); }
       }
       // Scroll through so scroll-triggered reveals fire, then return to top.
       const height = await page.evaluate(() => document.body.scrollHeight);

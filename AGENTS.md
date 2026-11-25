@@ -27,8 +27,10 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   format.js           number, money and date formatting
   types.js            JSDoc typedefs (Trip, ParseResult)
   email.js            .eml/.mbox → MIME → receipt text → Trip[] (Uber/Lyft heuristics)
+  story.js            rider type (rule-based personality) and real-world distance comparisons
   mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
-src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), card.js (share card PNG),
+src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), story.js (full-screen story), scene.js (arc scenes),
+                      visuals.js (SVG globe/dials/clock/calendar/etc.), card.js (share card PNG),
                       motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css
 data/sample-trips.csv synthetic rider, about 300 trips, May 2025 – Oct 2026
 scripts/              gen-sample, serve (static dev server), build (copy and verify)
@@ -51,7 +53,7 @@ There are no npm dependencies, so there's no `npm install`.
 
 ## Checking UI changes
 
-Use Playwright (preinstalled in the cloud environment; `require('playwright')`). Serve the app, load it at **390×844** and **1280×800**, click "Try with sample data", fail on any console error, and save screenshots to `docs/screenshots/`. Also check with `reducedMotion: 'reduce'`.
+Use Playwright (preinstalled in the cloud environment; `require('playwright')`). Serve the app, load it at **390×844** and **1280×800**, click "Try with sample data" (the story opens; add `?sample&nostory` to the URL to skip it), fail on any console error, and save screenshots to `docs/screenshots/`. Also check with `reducedMotion: 'reduce'`.
 
 ## Conventions
 

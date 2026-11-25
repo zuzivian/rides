@@ -6,7 +6,8 @@ import * as views from './views.js';
 import * as store from './store.js';
 import { animateIn, installTooltip } from './motion.js';
 import { RideMap, mapSection } from './map.js';
-import { cardSection, mountCard } from './card.js';
+import { cardSection, mountCard, saveCard } from './card.js';
+import { openStory } from './story.js';
 
 /** @typedef {import('../core/types.js').Trip} Trip */
 
@@ -46,7 +47,7 @@ function showDashboard(o) {
   app.innerHTML = views.dashboard(state.stats, { source: state.source, unit: state.unit, allPlaces: state.allPlaces, warnings: state.warnings });
   const slot = app.querySelector('#map-slot');
   if (slot && state.stats.places.length) {
-    slot.outerHTML = mapSection(state.stats);
+    slot.outerHTML = mapSection(state.stats, views.mapOverlay(state.stats, { source: state.source, unit: state.unit }));
     map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats);
   } else slot?.remove();
   const before = app.querySelector('.note-honest');
@@ -98,6 +99,18 @@ function loadTexts(files) {
   }
   state.allPlaces = false;
   showDashboard({ animate: true });
+  if (!new URLSearchParams(location.search).has('nostory')) playStory();
+}
+
+/** @param {string} [startId] */
+function playStory(startId) {
+  const s = state.stats; if (!s) return;
+  const year = s.years[s.years.length - 1];
+  openStory(s, {
+    unit: state.unit, startId,
+    onClose: () => { /** @type {HTMLElement|null} */ (app.querySelector('.map-canvas'))?.focus({ preventScroll: true }); },
+    onDownload: () => saveCard(s, { period: s.years.length > 1 ? 'all' : String(year.year), showNames: false, unit: state.unit }),
+  });
 }
 
 /** @param {FileList|File[]} list */
@@ -113,7 +126,7 @@ async function loadSample() {
   const text = await res.text();
   loadTexts([{ name: 'sample-trips.csv', text }]);
   state.source = 'Sample data · a made-up rider in San Francisco';
-  const eyebrow = app.querySelector('.headline .eyebrow');
+  const eyebrow = app.querySelector('.ov-head .eyebrow');
   if (eyebrow) eyebrow.innerHTML = `<b>●</b> ${views.esc(state.source)}`;
 }
 
@@ -150,6 +163,13 @@ app.addEventListener('click', (e) => {
   if (!t) return;
   const action = t.closest('[data-action]')?.getAttribute('data-action');
   if (action === 'sample') { loadSample(); return; }
+  if (action === 'story') { playStory(t.closest('[data-story-start]')?.getAttribute('data-story-start') || undefined); return; }
+  const cityBtn = t.closest('[data-city]');
+  if (cityBtn && !t.closest('.map-card') && map) {
+    map.fitCity(/** @type {string} */ (cityBtn.getAttribute('data-city')));
+    app.querySelector('.map-card')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    return;
+  }
   if (action === 'home') { showLanding(); return; }
   if (action === 'all-places') { state.allPlaces = !state.allPlaces; showDashboard({ animate: false, keepScroll: true }); return; }
   if (action === 'reset-names') { state.names = {}; store.save({ names: {}, unit: prefs.unit }); showDashboard({ animate: false, keepScroll: true }); return; }

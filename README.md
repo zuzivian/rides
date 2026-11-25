@@ -6,6 +6,9 @@ This is a web prototype. The plan is to turn it into an iPhone app later (see [d
 
 ## What you get
 
+After you load a file, Rides plays a **story**: about 12 full-screen cards, each with one big idea and one visual. You get distance drawn around a globe, days in the back seat as filling dials, your most loyal route glowing on the map, the city going dark except for your late-night rides, your busiest month as a calendar, and your **rider type** (for example "The Night Owl Commuter", worked out from your habits). It ends on your share card. Then you land on the **map**, with the stats laid over it and visual highlights below.
+
+
 - **Totals:** rides, distance, hours in cars, money spent (each currency kept separate)
 - **Records:** longest, most expensive and cheapest rides
 - **Places and routes:** pickup and dropoff points grouped into places ("Home", "Work", "SFO" and so on), which you can rename. Your top routes, such as "Home → Work, 44 times"
