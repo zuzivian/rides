@@ -1,12 +1,14 @@
 // HTML for each screen. Every interpolated value goes through esc().
 import * as fmt from '../core/format.js';
 import { tripKm } from '../core/stats.js';
+import { personality, distanceComparison, earthShare } from '../core/story.js';
+import { icons, globeSvg, dialsSvg, clockSvg, calendarHtml, priceSpark, emblemSvg } from './visuals.js';
 
 /** @typedef {import('../core/stats.js').Stats} Stats */
 
-/** @param {unknown} s */
-export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => (
-  { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] || c));
+import { esc } from './esc.js';
+
+export { esc };
 
 const KIND_BADGE = { home: 'HM', work: 'WK', airport: '✈', place: '•' };
 
@@ -96,154 +98,201 @@ export function landing(o = {}) {
 }
 
 /**
+ * Overlay shown on top of the hero map: who, how many, and four totals.
+ * @param {Stats} s @param {{source: string, unit: 'mi'|'km'}} ctx
+ */
+export function mapOverlay(s, ctx) {
+  const unit = ctx.unit;
+  const distV = unit === 'mi' ? s.km / 1.609344 : s.km;
+  const hours = s.minutes / 60;
+  const primary = s.spend[0];
+  const p = personality(s);
+  return `
+    <div class="ov-head">
+      <div class="eyebrow"><b>●</b> ${esc(ctx.source)}</div>
+      <div class="ov-big"><span data-count="${s.count}">${fmt.int(s.count)}</span><small>rides</small></div>
+      <div class="ov-sub">${esc(fmt.dayLabel(s.firstDay))} – ${esc(fmt.dayLabel(s.lastDay))}</div>
+      <button type="button" class="ov-type" data-action="story" data-story-start="type">${icons.spark}<span>${esc(p.title)}</span></button>
+    </div>
+    <div class="ov-chips">
+      <span class="ov-chip">${icons.road}<b data-count="${distV.toFixed(1)}">${fmt.int(distV)}</b>${unit}</span>
+      <span class="ov-chip">${icons.clock}<b data-count="${hours.toFixed(1)}">${fmt.int(hours)}</b>hours</span>
+      ${primary ? `<span class="ov-chip">${icons.coin}<b data-count="${primary.total.toFixed(2)}" data-money="${esc(primary.currency)}">${esc(fmt.money(primary.total, primary.currency, { compact: true }))}</b></span>` : ''}
+      <span class="ov-chip">${icons.pin}<b data-count="${s.places.length}">${s.places.length}</b>places</span>
+    </div>`;
+}
+
+/**
+ * The explore view: map first, then a grid of visual highlights.
  * @param {Stats} s
  * @param {{source: string, unit: 'mi'|'km', allPlaces: boolean, warnings: string[]}} ctx
  */
 export function dashboard(s, ctx) {
   const unit = ctx.unit;
   const name = (/** @type {string|null} */ id) => (id ? s.places.find((p) => p.id === id)?.name || '?' : null);
-  const distV = unit === 'mi' ? s.km / 1.609344 : s.km;
   const hours = s.minutes / 60;
   const primary = s.spend[0];
-  const otherSpend = s.spend.slice(1).filter((x) => x.currency);
+  const p = personality(s);
+  const cmp = distanceComparison(s.km);
+  const share = earthShare(s.km);
+  const distV = unit === 'mi' ? s.km / 1.609344 : s.km;
 
   return `
   <header class="topbar"><div class="wrap">
     <button class="btn btn-ghost btn-small" data-action="home" aria-label="Back to start" style="padding:0 6px"><span class="mark">Rides<i>.</i></span></button>
     <span class="spacer"></span>
+    <button class="btn btn-primary btn-small" data-action="story">▶ Story</button>
     <div class="seg" role="group" aria-label="Distance unit">
       <button type="button" data-unit="mi" aria-pressed="${unit === 'mi'}">mi</button>
       <button type="button" data-unit="km" aria-pressed="${unit === 'km'}">km</button>
     </div>
-    <button class="btn btn-small" data-action="home">New file</button>
+    <button class="btn btn-small btn-ghost" data-action="home" aria-label="Load a different file">New</button>
   </div></header>
 
-  <main class="wrap dash">
-    <section class="headline span-12 reveal">
-      <div class="eyebrow"><b>●</b> ${esc(ctx.source)}</div>
-      <div class="big"><span data-count="${s.count}">${fmt.int(s.count)}</span><small>rides</small></div>
-      <p class="sub">on your account, <strong>${esc(fmt.dayLabel(s.firstDay))}</strong> to <strong>${esc(fmt.dayLabel(s.lastDay))}</strong>.</p>
-    </section>
+  <main class="explore">
+    <section id="map-slot"></section>
 
-    <section class="tiles span-12 reveal" aria-label="Totals">
-      ${tile('Distance', `<span data-count="${distV.toFixed(1)}" data-dec="0">${fmt.int(distV)}</span><span class="u">${unit}</span>`, s.kmKnown < s.count ? `${s.count - s.kmKnown} rides without distance` : `${fmt.distance(s.km / s.count, unit)} on average`)}
-      ${hours >= 2
-    ? tile('In the car', `<span data-count="${hours.toFixed(1)}" data-dec="0">${fmt.int(hours)}</span><span class="u">hours</span>`, hours >= 24 ? `${(hours / 24).toFixed(1)} days` : `${fmt.duration(s.minutes / Math.max(1, s.minutesKnown))} per ride`)
-    : tile('In the car', `<span data-count="${Math.round(s.minutes)}">${fmt.int(s.minutes)}</span><span class="u">min</span>`, s.minutesKnown ? `${fmt.duration(s.minutes / s.minutesKnown)} per ride` : 'no dropoff times')}
-      ${tile('Spent', primary ? `<span data-count="${primary.total.toFixed(2)}" data-money="${esc(primary.currency)}">${esc(fmt.money(primary.total, primary.currency, { compact: true }))}</span>` : '—',
-        otherSpend.length ? `+ ${otherSpend.map((o) => esc(fmt.money(o.total, o.currency, { compact: true }))).join(', ')}` : primary ? `${esc(fmt.money(primary.total / primary.count, primary.currency))} a ride` : 'No fares in this file')}
-      ${tile('Places', `<span data-count="${s.places.length}">${s.places.length}</span>`, `${fmt.plural(s.cities.filter((c) => c.name !== 'Unknown').length || 1, 'city', 'cities')}`)}
-    </section>
+    <div class="wrap dash">
+      <section class="card type-card span-4 reveal" aria-labelledby="h-type">
+        <div class="eyebrow">Your rider type</div>
+        <div class="type-row">${emblemSvg(p.traits.map((t) => t.key))}<h2 id="h-type">${esc(p.title)}</h2></div>
+        <ul class="reason-list">${p.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
+      </section>
 
-    <section id="map-slot" class="span-12"></section>
+      ${s.km > 0 ? `<section class="card vis-card span-4 reveal" aria-labelledby="h-dist">
+        <div class="eyebrow">${icons.road} Distance</div>
+        <div class="vis">${globeSvg(share)}</div>
+        <h2 id="h-dist" class="vis-big">${fmt.int(distV)} ${unit === 'mi' ? 'miles' : 'km'}</h2>
+        <p class="sub">${cmp ? esc(cmp.text) : 'Every ride, end to end.'} ${share >= 0.01 ? `${share >= 1 ? `${share.toFixed(1)}×` : `${Math.round(share * 100)}% of the way`} around the Earth.` : ''}</p>
+      </section>` : ''}
 
-    ${s.lines.length ? `<section class="card span-7 reveal" aria-labelledby="h-lines">
-      <div class="eyebrow">Highlights</div>
-      <h2 id="h-lines">The short version</h2>
-      <ol class="lines">${s.lines.map((l) => `<li>${esc(l)}</li>`).join('')}</ol>
-    </section>` : ''}
+      ${hours > 0.5 ? `<section class="card vis-card span-4 reveal" aria-labelledby="h-time">
+        <div class="eyebrow">${icons.clock} In the back seat</div>
+        <div class="vis">${dialsSvg(hours)}</div>
+        <h2 id="h-time" class="vis-big">${hours >= 24 ? `${(hours / 24).toFixed(1)} days` : `${Math.round(hours)} hours`}</h2>
+        <p class="sub">${fmt.int(hours)} hours in cars, about ${esc(fmt.duration(s.minutes / Math.max(1, s.minutesKnown)))} per ride.</p>
+      </section>` : ''}
 
-    <section class="card span-5 reveal" aria-labelledby="h-rec">
-      <div class="eyebrow">Records</div>
-      <h2 id="h-rec">Your extremes</h2>
-      <div class="records" style="grid-template-columns:1fr">
-        ${s.longest ? record('Longest ride', fmt.distance(/** @type {number} */ (tripKm(s.longest.trip)), unit), s.longest, name) : ''}
-        ${s.mostExpensive ? record('Most expensive', fmt.money(/** @type {number} */ (s.mostExpensive.trip.fare), s.primaryCurrency), s.mostExpensive, name) : ''}
-        ${s.cheapest ? record('Cheapest', fmt.money(/** @type {number} */ (s.cheapest.trip.fare), s.primaryCurrency), s.cheapest, name) : ''}
-      </div>
-    </section>
+      <section class="card span-7 reveal pre" aria-labelledby="h-routes">
+        <div class="eyebrow">${icons.flame} Routes</div>
+        <h2 id="h-routes">${s.routes[0] ? `${esc(s.routes[0].fromName)} <span class="accent">→</span> ${esc(s.routes[0].toName)}, ${s.routes[0].count} times` : 'Where you go most'}</h2>
+        ${s.routes.length ? `<ul class="bars routes">${s.routes.slice(0, 6).map((r) => `
+          <li data-tip="${esc(`${r.fromName} → ${r.toName}\n${r.count} rides · ${fmt.distance(r.avgKm, unit)} each${r.medianMinutes ? ` · ${Math.round(r.medianMinutes)} min typical` : ''}${r.spend ? `\n${fmt.money(r.spend, s.primaryCurrency)} in total` : ''}`)}">
+            <span class="label">${miniArc()}${esc(r.fromName)}<span class="arrow">→</span>${esc(r.toName)}</span><span class="n">${r.count}</span>
+            <span class="track"><span class="fill" style="--w:${(r.count / s.routes[0].count).toFixed(3)}"></span></span>
+          </li>`).join('')}</ul>` : '<p class="foot">No pickup and dropoff coordinates in this file, so routes can’t be grouped.</p>'}
+      </section>
 
-    <section class="card span-7 reveal pre" aria-labelledby="h-routes">
-      <div class="eyebrow">Routes</div>
-      <h2 id="h-routes">Where you go most</h2>
-      ${s.routes.length ? `<ul class="bars">${s.routes.slice(0, 6).map((r) => `
-        <li data-tip="${esc(`${r.fromName} → ${r.toName}\n${r.count} rides · ${fmt.distance(r.avgKm, unit)} each${r.medianMinutes ? ` · ${Math.round(r.medianMinutes)} min typical` : ''}${r.spend ? `\n${fmt.money(r.spend, s.primaryCurrency)} in total` : ''}`)}">
-          <span class="label">${esc(r.fromName)}<span class="arrow">→</span>${esc(r.toName)}</span><span class="n">${r.count}</span>
-          <span class="track"><span class="fill" style="--w:${(r.count / s.routes[0].count).toFixed(3)}"></span></span>
-        </li>`).join('')}</ul>` : '<p class="foot">No pickup and dropoff coordinates in this file, so routes can’t be grouped.</p>'}
-      <p class="foot">Pickups and dropoffs within about 250 m are grouped into one place. Give places your own names in the Places card.</p>
-    </section>
+      <section class="card span-5 reveal" aria-labelledby="h-places">
+        <div class="eyebrow">${icons.pin} Places</div>
+        <h2 id="h-places">Name your spots</h2>
+        ${s.places.length ? `<ul class="places">${s.places.slice(0, ctx.allPlaces ? 60 : 6).map((pl) => `
+          <li>
+            <span class="kind" aria-hidden="true">${KIND_BADGE[pl.kind]}</span>
+            <button class="name" type="button" data-rename="${esc(pl.id)}" aria-label="Rename ${esc(pl.name)}">${esc(pl.name)}</button>
+            <span class="n">${pl.visits}</span>
+          </li>`).join('')}</ul>
+          <div class="more">
+            ${s.places.length > 6 ? `<button class="btn btn-small" data-action="all-places">${ctx.allPlaces ? 'Show fewer' : `Show all ${s.places.length}`}</button>` : ''}
+            <button class="btn btn-small btn-ghost" data-action="reset-names">Reset names</button>
+          </div>` : '<p class="foot">Receipt-only rides have no coordinates, so there are no places to name.</p>'}
+        <p class="foot">Nicknames stay on this device.</p>
+      </section>
 
-    <section class="card span-5 reveal" aria-labelledby="h-places">
-      <div class="eyebrow">Places</div>
-      <h2 id="h-places">Name your spots</h2>
-      ${s.places.length ? `<ul class="places">${s.places.slice(0, ctx.allPlaces ? 60 : 8).map((p) => `
-        <li>
-          <span class="kind" aria-hidden="true">${KIND_BADGE[p.kind]}</span>
-          <button class="name" type="button" data-rename="${esc(p.id)}" aria-label="Rename ${esc(p.name)}">${esc(p.name)}</button>
-          <span class="n">${p.visits}</span>
-        </li>`).join('')}</ul>
-        <div class="more">
-          ${s.places.length > 8 ? `<button class="btn btn-small" data-action="all-places">${ctx.allPlaces ? 'Show fewer' : `Show all ${s.places.length}`}</button>` : ''}
-          <button class="btn btn-small btn-ghost" data-action="reset-names">Reset names</button>
-        </div>` : '<p class="foot">No coordinates in this file.</p>'}
-      <p class="foot">Nicknames stay on this device. Numbers count pickups plus dropoffs.</p>
-    </section>
+      <section class="card span-7 reveal" aria-labelledby="h-heat">
+        <div class="eyebrow">${icons.clock} Rhythm</div>
+        <h2 id="h-heat"><span class="accent">${esc(fmt.WEEKDAY_NAMES[s.peak.weekday])}s, ${esc(fmt.hourLabel(s.peak.hour))}</span> is your hour</h2>
+        <div class="rhythm">
+          <div class="clock-wrap small">${clockSvg(s.byHour, s.peak.hour)}<div class="clock-mid"><b>${esc(fmt.hourLabel(s.peak.hour))}</b><span>peak</span></div></div>
+          <div class="rhythm-heat">${heatmap(s)}
+            <div class="legend"><span>Fewer</span><span class="ramp"></span><span>More rides</span></div>
+          </div>
+        </div>
+      </section>
 
-    <section class="card span-7 reveal" aria-labelledby="h-heat">
-      <div class="eyebrow">Rhythm</div>
-      <h2 id="h-heat">When you ride: <span class="accent">${esc(fmt.WEEKDAY_NAMES[s.peak.weekday])}s, ${esc(fmt.hourLabel(s.peak.hour))}</span></h2>
-      ${heatmap(s)}
-      <div class="legend"><span>Fewer</span><span class="ramp"></span><span>More rides</span><span style="margin-left:auto">Local time where each ride began</span></div>
-    </section>
+      <section class="card span-5 reveal" aria-labelledby="h-facts">
+        <div class="eyebrow">Habits</div>
+        <h2 id="h-facts">The little patterns</h2>
+        <div class="facts icons">
+          ${fact(`${icons.moon} Late night`, fmt.int(s.lateNight.count), `rides between midnight and 5 am (${Math.round(s.lateNight.share * 100)}%)`)}
+          ${fact(`${icons.plane} Airport runs`, fmt.int(s.airports.count), s.airports.byCode.length ? s.airports.byCode.slice(0, 3).map((a) => `${esc(a.code)} ${a.count}`).join(' · ') : 'none found')}
+          ${fact(`${icons.flame} Streak`, `${s.streaks.longestDays.length} ${s.streaks.longestDays.length === 1 ? 'day' : 'days'}`, s.streaks.longestDays.length > 1 ? `in a row, ending ${esc(fmt.dayLabel(s.streaks.longestDays.end))}` : 'with a ride each day')}
+          ${fact(`${icons.clock} Wait`, s.wait ? `${s.wait.avgMinutes.toFixed(1)} min` : '—', s.wait ? 'on average, request to pickup' : 'no request times in this file')}
+        </div>
+      </section>
 
-    <section class="card span-5 reveal" aria-labelledby="h-facts">
-      <div class="eyebrow">Habits</div>
-      <h2 id="h-facts">Patterns</h2>
-      <div class="facts">
-        ${fact('Late night', fmt.int(s.lateNight.count), `rides between midnight and 5 am (${Math.round(s.lateNight.share * 100)}%)`)}
-        ${fact('Airport runs', fmt.int(s.airports.count), s.airports.byCode.length ? s.airports.byCode.slice(0, 3).map((a) => `${esc(a.code)} ${a.count}`).join(' · ') : 'none found')}
-        ${fact('Longest streak', `${s.streaks.longestDays.length} ${s.streaks.longestDays.length === 1 ? 'day' : 'days'}`, s.streaks.longestDays.length > 1 ? `${esc(fmt.dayLabel(s.streaks.longestDays.start))} to ${esc(fmt.dayLabel(s.streaks.longestDays.end))}` : 'with a ride each day')}
-        ${fact('Weekly streak', `${s.streaks.longestWeeks} ${s.streaks.longestWeeks === 1 ? 'week' : 'weeks'}`, 'in a row with at least one ride')}
-        ${fact('Average wait', s.wait ? `${s.wait.avgMinutes.toFixed(1)} min` : '—', s.wait ? `from request to pickup, ${fmt.plural(s.wait.count, 'ride')}` : 'no request times in this file')}
-        ${fact('Longest break', `${s.streaks.longestGap.days} days`, s.streaks.longestGap.days ? `without a ride, ending ${esc(fmt.dayLabel(s.streaks.longestGap.end))}` : '')}
-      </div>
-    </section>
+      <section class="card span-12 reveal pre" aria-labelledby="h-months">
+        <div class="eyebrow">${icons.calendar} Months</div>
+        <h2 id="h-months">${s.busiestMonth ? `Busiest: <span class="accent">${esc(fmt.monthLabel(s.busiestMonth.key))}</span>, ${s.busiestMonth.count} rides` : 'By month'}</h2>
+        <div class="months-row">
+          <div class="months-chart">${months(s)}</div>
+          ${s.busiestMonth ? `<div class="months-cal">${calendarHtml(s, s.busiestMonth.key)}</div>` : ''}
+        </div>
+      </section>
 
-    <section class="card span-12 reveal pre" aria-labelledby="h-months">
-      <div class="eyebrow">Months</div>
-      <h2 id="h-months">${s.busiestMonth ? `Busiest: <span class="accent">${esc(fmt.monthLabel(s.busiestMonth.key))}</span>` : 'By month'}</h2>
-      ${months(s)}
-      <div class="split">
-        <div><div class="k">Busiest month</div><div class="val">${s.busiestMonth ? `${esc(fmt.monthLabel(s.busiestMonth.key))} · ${fmt.plural(s.busiestMonth.count, 'ride')}` : '—'}</div></div>
-        <div><div class="k">Quietest month</div><div class="val">${s.quietestMonth ? `${esc(fmt.monthLabel(s.quietestMonth.key))} · ${fmt.plural(s.quietestMonth.count, 'ride')}` : '—'}</div></div>
-      </div>
-    </section>
+      ${s.years.length > 1 ? `<section class="card span-6 reveal pre" aria-labelledby="h-years">
+        <div class="eyebrow">Year over year</div>
+        <h2 id="h-years">${yearTitle(s)}</h2>
+        ${yearBars(s)}
+        <p class="foot">Rides per month, so partial years compare fairly.</p>
+      </section>` : ''}
 
-    <section class="card span-7 reveal" aria-labelledby="h-years">
-      <div class="eyebrow">Year over year</div>
-      <h2 id="h-years">${years(s).title}</h2>
-      <div class="scroll-x">${years(s).table}</div>
-      <p class="foot">Changes compare rides per month, so partial years are fair.</p>
-    </section>
+      ${primary ? `<section class="card span-6 reveal" aria-labelledby="h-spend">
+        <div class="eyebrow">${icons.coin} Spent</div>
+        <h2 id="h-spend" class="vis-big">${esc(fmt.money(primary.total, primary.currency, { compact: true }))}</h2>
+        <p class="sub">${esc(fmt.money(primary.total / primary.count, primary.currency))} a ride on average${s.pricePerDistance.overall ? `, ${esc(fmt.money(s.pricePerDistance.overall, s.pricePerDistance.currency))} per ${unit}` : ''}.${s.spend.length > 1 ? ` Plus ${s.spend.slice(1).map((x) => esc(fmt.money(x.total, x.currency, { compact: true }))).join(', ')} (not converted).` : ''}</p>
+        <div class="spark-wrap">${priceSpark(s)}<span class="spark-cap">price per ${unit === 'mi' ? 'mile' : 'km'} by month${s.pricePerDistance.change != null && Math.abs(s.pricePerDistance.change) >= 0.05 ? `, ${s.pricePerDistance.change > 0 ? 'up' : 'down'} ${Math.round(Math.abs(s.pricePerDistance.change) * 100)}%` : ''}</span></div>
+      </section>` : ''}
 
-    <section class="card span-5 reveal" aria-labelledby="h-ppm">
-      <div class="eyebrow">Price per ${unit === 'mi' ? 'mile' : 'km'}</div>
-      <h2 id="h-ppm">${ppmTitle(s)}</h2>
-      ${spark(s)}
-      <p class="foot">${s.pricePerDistance.currency ? `${esc(s.pricePerDistance.currency)} rides only, monthly. Short hops under 0.3 km left out.` : 'No fares in this file.'}</p>
-    </section>
+      <section class="card span-6 reveal" aria-labelledby="h-mix">
+        <div class="eyebrow">Ride types</div>
+        <h2 id="h-mix">${esc(s.products[0]?.name || '')}, ${Math.round((s.products[0]?.share || 0) * 100)}% of the time</h2>
+        <div class="mix big" aria-hidden="true">${s.products.map((pr, i) => `<span style="flex:${pr.count};--o:${Math.max(0.2, 1 - i * 0.16).toFixed(2)}" data-tip="${esc(`${pr.name}\n${pr.count} rides · ${Math.round(pr.share * 100)}%`)}"></span>`).join('')}</div>
+        <div class="mix-legend">${s.products.slice(0, 7).map((pr, i) => `<span><i style="--o:${Math.max(0.2, 1 - i * 0.16).toFixed(2)}"></i>${esc(pr.name)} <b>${Math.round(pr.share * 100)}%</b></span>`).join('')}</div>
+      </section>
 
-    <section class="card span-6 reveal pre" aria-labelledby="h-mix">
-      <div class="eyebrow">Product mix</div>
-      <h2 id="h-mix">${esc(s.products[0]?.name || '')} most of the time</h2>
-      <div class="mix" aria-hidden="true">${s.products.map((p, i) => `<span style="flex:${p.count};--o:${Math.max(0.18, 1 - i * 0.16).toFixed(2)}" data-tip="${esc(`${p.name}\n${p.count} rides · ${Math.round(p.share * 100)}%`)}"></span>`).join('')}</div>
-      <ul class="bars">${s.products.slice(0, 6).map((p) => `
-        <li><span class="label">${esc(p.name)}</span><span class="n">${Math.round(p.share * 100)}%</span>
-        <span class="track"><span class="fill" style="--w:${(p.count / s.products[0].count).toFixed(3)}"></span></span></li>`).join('')}</ul>
-    </section>
+      <section class="card span-6 reveal" aria-labelledby="h-cities">
+        <div class="eyebrow">${icons.globe} Cities</div>
+        <h2 id="h-cities">${fmt.plural(s.cities.length, 'city', 'cities')}</h2>
+        <div class="city-chips">${s.cities.slice(0, 8).map((c) => `<button type="button" class="city-chip" data-city="${esc(c.name.replace(/\s+(Bay Area|Area)$/i, ''))}" style="--f:${Math.sqrt(c.count / s.cities[0].count).toFixed(2)}"><b>${esc(c.name)}</b><span>${fmt.plural(c.count, 'ride')}</span></button>`).join('')}</div>
+        <p class="foot">Tap a city to fly the map there.</p>
+      </section>
 
-    <section class="card span-6 reveal pre" aria-labelledby="h-cities">
-      <div class="eyebrow">Cities</div>
-      <h2 id="h-cities">${fmt.plural(s.cities.length, 'city', 'cities')}</h2>
-      <ul class="bars">${s.cities.slice(0, 6).map((c) => `
-        <li data-tip="${esc(`${c.name}\nFirst ride ${new Date(c.first).toISOString().slice(0, 10)}`)}"><span class="label">${esc(c.name)}</span><span class="n">${c.count}</span>
-        <span class="track"><span class="fill" style="--w:${(c.count / s.cities[0].count).toFixed(3)}"></span></span></li>`).join('')}</ul>
-      ${s.spend.length > 1 ? `<p class="foot">Spending by currency: ${s.spend.map((x) => esc(fmt.money(x.total, x.currency))).join(' · ')}. Currencies aren’t converted.</p>` : ''}
-    </section>
+      <section class="card span-12 reveal" aria-labelledby="h-rec">
+        <div class="eyebrow">Records</div>
+        <h2 id="h-rec">Your extremes</h2>
+        <div class="records">
+          ${s.longest ? record('Longest ride', fmt.distance(/** @type {number} */ (tripKm(s.longest.trip)), unit), s.longest, name) : ''}
+          ${s.mostExpensive ? record('Most expensive', fmt.money(/** @type {number} */ (s.mostExpensive.trip.fare), s.primaryCurrency), s.mostExpensive, name) : ''}
+          ${s.cheapest ? record('Cheapest', fmt.money(/** @type {number} */ (s.cheapest.trip.fare), s.primaryCurrency), s.cheapest, name) : ''}
+        </div>
+      </section>
 
-    <p class="note-honest span-12">These are rides on your account. Rides friends booked for you aren’t in your export, so they aren’t included.${ctx.warnings.length ? ` ${ctx.warnings.map(esc).join(' ')}` : ''}</p>
+      <p class="note-honest span-12">These are rides on your account. Rides friends booked for you aren’t in your export, so they aren’t included.${ctx.warnings.length ? ` ${ctx.warnings.map(esc).join(' ')}` : ''}</p>
+    </div>
   </main>`;
+}
+
+/** @param {Stats} s */
+function yearTitle(s) {
+  const ys = s.years; const a = ys[ys.length - 2]; const b = ys[ys.length - 1];
+  const ch = (b.count / Math.max(1, b.monthsCovered)) / (a.count / Math.max(1, a.monthsCovered)) - 1;
+  return Math.abs(ch) < 0.05 ? `${b.year} is on the same pace as ${a.year}` : `${b.year} is <span class="accent">${Math.round(Math.abs(ch) * 100)}% ${ch > 0 ? 'busier' : 'quieter'}</span> than ${a.year}`;
+}
+
+/** Year-over-year as side-by-side pace bars for rides, distance and spend. @param {Stats} s */
+function yearBars(s) {
+  const ys = s.years.slice(-3);
+  const metrics = [
+    ['Rides a month', (/** @type {typeof ys[0]} */ y) => y.count / Math.max(1, y.monthsCovered), (/** @type {number} */ v) => v.toFixed(1)],
+    [`${s.unit} a month`, (/** @type {typeof ys[0]} */ y) => (s.unit === 'mi' ? y.km / 1.609344 : y.km) / Math.max(1, y.monthsCovered), (/** @type {number} */ v) => fmt.int(v)],
+    ...(s.primaryCurrency ? [['Spent a month', (/** @type {typeof ys[0]} */ y) => y.spend / Math.max(1, y.monthsCovered), (/** @type {number} */ v) => fmt.money(v, s.primaryCurrency, { compact: true })]] : []),
+  ];
+  return `<div class="ybars">${metrics.map(([label, f, show]) => {
+    const vals = ys.map((y) => /** @type {(y: any)=>number} */ (f)(y)); const max = Math.max(...vals, 1e-9);
+    return `<div class="yb"><div class="yb-label">${esc(label)}</div><div class="yb-cols">${ys.map((y, i) => `
+      <div class="yb-col${i === ys.length - 1 ? ' cur' : ''}"><span class="yb-v">${esc(/** @type {(v:number)=>string} */ (show)(vals[i]))}</span><span class="yb-bar" style="--h:${(vals[i] / max).toFixed(3)}"></span><span class="yb-y">${y.year}${y.monthsCovered < 12 ? `<small>${y.monthsCovered} mo</small>` : ''}</span></div>`).join('')}</div></div>`;
+  }).join('')}</div>`;
 }
 
 function tile(label, value, note) {
@@ -304,73 +353,3 @@ function months(s) {
   return `<div class="cols" role="img" aria-label="Rides per month">${cols}</div><div class="axis" aria-hidden="true">${axis}</div>`;
 }
 
-/** @param {Stats} s */
-function years(s) {
-  const ys = s.years;
-  const unit = s.unit;
-  const rows = ys.map((y, i) => {
-    const prev = ys[i - 1];
-    const perMonth = (/** @type {typeof y} */ x, /** @type {number} */ v) => v / Math.max(1, x.monthsCovered);
-    const delta = (/** @type {number} */ cur, /** @type {number} */ old) => {
-      if (!prev || !old) return '';
-      const ch = (perMonth(y, cur) - perMonth(prev, old)) / perMonth(prev, old);
-      if (Math.abs(ch) < 0.01) return '<span class="delta">same pace</span>';
-      return `<span class="delta${ch > 0 ? ' up' : ''}">${ch > 0 ? '↑' : '↓'} ${Math.abs(Math.round(ch * 100))}%</span>`;
-    };
-    const dist = unit === 'mi' ? y.km / 1.609344 : y.km;
-    return `<tr>
-      <th scope="row">${y.year}${y.monthsCovered < 12 ? `<span class="partial">${y.monthsCovered} mo</span>` : ''}</th>
-      <td>${fmt.int(y.count)}${delta(y.count, prev?.count || 0)}</td>
-      <td>${fmt.int(dist)}${delta(y.km, prev?.km || 0)}</td>
-      <td>${fmt.int(y.minutes / 60)}${delta(y.minutes, prev?.minutes || 0)}</td>
-      <td>${s.primaryCurrency ? esc(fmt.money(y.spend, s.primaryCurrency, { compact: true })) : '—'}${delta(y.spend, prev?.spend || 0)}</td>
-      <td>${fmt.int(y.lateNight)}</td>
-    </tr>`;
-  }).join('');
-  let title = 'One year so far';
-  if (ys.length >= 2) {
-    const a = ys[ys.length - 2]; const b = ys[ys.length - 1];
-    const ch = (b.count / Math.max(1, b.monthsCovered)) / (a.count / Math.max(1, a.monthsCovered)) - 1;
-    title = Math.abs(ch) < 0.05 ? `${b.year} is on the same pace as ${a.year}` : `${b.year} is <span class="accent">${Math.round(Math.abs(ch) * 100)}% ${ch > 0 ? 'busier' : 'quieter'}</span> than ${a.year}`;
-  }
-  return {
-    title,
-    table: `<table class="years"><thead><tr><th scope="col">Year</th><th scope="col">Rides</th><th scope="col">${unit}</th><th scope="col">Hours</th><th scope="col">Spent</th><th scope="col">Late</th></tr></thead><tbody>${rows}</tbody></table>`,
-  };
-}
-
-/** @param {Stats} s */
-function ppmTitle(s) {
-  const p = s.pricePerDistance;
-  if (p.overall == null) return 'Not enough fares';
-  const v = esc(fmt.money(p.overall, p.currency));
-  if (p.change == null || Math.abs(p.change) < 0.05) return `About <span class="accent">${v}</span>, steady`;
-  return `<span class="accent">${v}</span> on average, ${p.change > 0 ? 'up' : 'down'} ${Math.round(Math.abs(p.change) * 100)}%`;
-}
-
-/** @param {Stats} s */
-function spark(s) {
-  const pts = s.pricePerDistance.series;
-  if (pts.length < 2) return '';
-  const W = 600; const H = 230; const P = { l: 74, r: 10, t: 14, b: 34 };
-  const vals = pts.map((p) => p.value);
-  const lo = Math.min(...vals) * 0.9; const hi = Math.max(...vals) * 1.05;
-  const x = (/** @type {number} */ i) => P.l + (i / (pts.length - 1)) * (W - P.l - P.r);
-  const y = (/** @type {number} */ v) => P.t + (1 - (v - lo) / (hi - lo)) * (H - P.t - P.b);
-  const d = pts.map((p, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)} ${y(p.value).toFixed(1)}`).join(' ');
-  const area = `${d} L${x(pts.length - 1).toFixed(1)} ${H - P.b} L${x(0).toFixed(1)} ${H - P.b} Z`;
-  let len = 0;
-  for (let i = 1; i < pts.length; i++) len += Math.hypot(x(i) - x(i - 1), y(pts[i].value) - y(pts[i - 1].value));
-  const ticks = [lo + (hi - lo) * 0.15, lo + (hi - lo) * 0.85];
-  const cur = s.pricePerDistance.currency;
-  const step = (W - P.l - P.r) / (pts.length - 1);
-  return `<svg class="spark draw" viewBox="0 0 ${W} ${H}" style="height:auto;--len:${Math.ceil(len)}" role="img" aria-label="Price per distance by month">
-    <defs><linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffb547" stop-opacity=".22"/><stop offset="1" stop-color="#ffb547" stop-opacity="0"/></linearGradient></defs>
-    ${ticks.map((t) => `<line class="grid" x1="${P.l}" x2="${W - P.r}" y1="${y(t).toFixed(1)}" y2="${y(t).toFixed(1)}"/><text x="0" y="${(y(t) + 6).toFixed(1)}">${esc(fmt.money(t, cur))}</text>`).join('')}
-    <path class="area" d="${area}"/><path class="line" d="${d}"/>
-    <circle class="dot" cx="${x(pts.length - 1).toFixed(1)}" cy="${y(pts[pts.length - 1].value).toFixed(1)}" r="5"/>
-    <text x="${P.l}" y="${H - 6}">${esc(fmt.monthLabel(pts[0].key, true))}</text>
-    <text x="${W - P.r}" y="${H - 6}" text-anchor="end">${esc(fmt.monthLabel(pts[pts.length - 1].key, true))}</text>
-    ${pts.map((p, i) => `<rect class="hit" x="${(x(i) - step / 2).toFixed(1)}" y="0" width="${step.toFixed(1)}" height="${H}" data-tip="${esc(`${fmt.monthLabel(p.key)}\n${fmt.money(p.value, cur)} per ${s.unit} · ${fmt.plural(p.count, 'ride')}`)}"/>`).join('')}
-  </svg>`;
-}
