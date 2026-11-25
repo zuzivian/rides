@@ -1,0 +1,3 @@
+city_name,product_type_name,status,request_timestamp_local,begin_trip_timestamp_local,begintrip_lat,begintrip_lng,begintrip_address,dropoff_timestamp_local,dropoff_lat,dropoff_lng,dropoff_address,distance_km,original_fare_local,currency_code
+London,UberX,completed,2025-07-04 18:01:00,2025-07-04 18:06:00,51.5246,-0.0780,"Somewhere, London",2025-07-04 18:30:00,51.5136,-0.1320,"Elsewhere, London",6.4,"£14.20",GBP
+London,Uber Eats,completed,2025-07-04 19:00:00,2025-07-04 19:00:00,51.5,-0.1,,2025-07-04 19:30:00,51.5,-0.1,,0,9.99,GBP
