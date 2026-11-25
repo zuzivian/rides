@@ -8,7 +8,7 @@ Rides is a client-only web app that parses a person's own Uber or Lyft export an
 
 ## Hard rules
 
-1. **No network calls with user data.** No server, no analytics, no remote scripts or fonts. The CSP in `index.html` enforces this. Map tiles are the only allowed third-party request.
+1. **No network calls with user data.** No server, no analytics, no remote scripts or fonts. The CSP in `index.html` enforces this. The only third-party request ever allowed is basemap tiles, and the current map uses none.
 2. **Never commit real ride data.** Use `data/sample-trips.csv` (synthetic, generated) or files under `private/` (git-ignored).
 3. **No runtime dependencies from CDNs.** If a library is needed, vendor a pinned copy into `public/vendor/` with its licence.
 4. **`src/core/` stays pure.** It has no DOM, no `fetch`, no `localStorage` and no Node APIs, so it runs in the browser, in `node --test`, and can be ported to Swift one file at a time.
@@ -26,7 +26,9 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   stats.js            computeStats(trips, {names, unit}) → everything the UI shows
   format.js           number, money and date formatting
   types.js            JSDoc typedefs (Trip, ParseResult)
-src/ui/               DOM code (slice 2+)
+  mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
+src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay),
+                      motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css
 data/sample-trips.csv synthetic rider, about 300 trips, May 2025 – Oct 2026
 scripts/              gen-sample, serve (static dev server), build (copy and verify)
 test/                 node:test suites and fixtures

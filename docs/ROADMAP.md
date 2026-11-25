@@ -8,6 +8,7 @@ Ships as five small slices, each its own PR:
 2. **Stats UI.** Mobile-first stats screens: totals that count up, records, top routes, heatmap, months, years, price trend, product mix, place renaming.
 3. **Map.** Every trip as an arc, brightness weighted by frequency. A "replay my year" animation with a date ticker. Click a place to see its stats.
 4. **Share card.** A 1080×1920 "my year in rides" PNG rendered client-side, with a mini map. No names or addresses unless the user opts in to nicknames.
+   - Follow-up: optional MapLibre GL basemap (vendored into `public/vendor/`, free OpenStreetMap-based vector tiles, no key) under the arc layer. The arc renderer only needs a `project(lng, lat)` function, so it can sit on top of MapLibre as a custom layer. This was blocked here because the build sandbox has no access to npm or CDNs.
 5. **Receipt import.** Parse Uber/Lyft receipt emails (`.eml`, `.mbox`) in the browser and merge them with export data without duplicates.
 
 ## Phase 2: email import by forwarding address

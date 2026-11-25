@@ -54,7 +54,7 @@ export function landing(o = {}) {
       <div class="drop">Or drop your <code>trips_data.csv</code> anywhere on this page</div>
       <ul class="promises">
         <li>Parsed in your browser. No server, no account, no analytics.</li>
-        <li>Only map tiles are fetched from the internet. Your trips never are.</li>
+        <li>The map is drawn from your rides alone. No map tiles, no third-party requests.</li>
         <li>Place nicknames are saved on this device only. You can clear them anytime.</li>
       </ul>
     </section>
@@ -124,6 +124,8 @@ export function dashboard(s, ctx) {
         otherSpend.length ? `+ ${otherSpend.map((o) => esc(fmt.money(o.total, o.currency, { compact: true }))).join(', ')}` : primary ? `${esc(fmt.money(primary.total / primary.count, primary.currency))} a ride` : 'No fares in this file')}
       ${tile('Places', `<span data-count="${s.places.length}">${s.places.length}</span>`, `${fmt.plural(s.cities.filter((c) => c.name !== 'Unknown').length || 1, 'city', 'cities')}`)}
     </section>
+
+    <section id="map-slot" class="span-12"></section>
 
     ${s.lines.length ? `<section class="card span-7 reveal" aria-labelledby="h-lines">
       <div class="eyebrow">Highlights</div>
@@ -229,8 +231,6 @@ export function dashboard(s, ctx) {
         <span class="track"><span class="fill" style="--w:${(c.count / s.cities[0].count).toFixed(3)}"></span></span></li>`).join('')}</ul>
       ${s.spend.length > 1 ? `<p class="foot">Spending by currency: ${s.spend.map((x) => esc(fmt.money(x.total, x.currency))).join(' · ')}. Currencies aren’t converted.</p>` : ''}
     </section>
-
-    <section id="map-slot" class="span-12"></section>
 
     <p class="note-honest span-12">These are rides on your account. Rides friends booked for you aren’t in your export, so they aren’t included.${ctx.warnings.length ? ` ${ctx.warnings.map(esc).join(' ')}` : ''}</p>
   </main>`;
