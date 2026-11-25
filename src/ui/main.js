@@ -1,6 +1,7 @@
 // App controller: load files, compute stats, render, handle interactions.
 import { parseTripsCsv, mergeTrips, ParseError } from '../core/parse.js';
 import { computeStats } from '../core/stats.js';
+import { parseReceipts, looksLikeEmail } from '../core/email.js';
 import * as views from './views.js';
 import * as store from './store.js';
 import { animateIn, installTooltip } from './motion.js';
@@ -67,8 +68,16 @@ function loadTexts(files) {
   const warnings = [];
   const sources = new Set();
   const errors = [];
+  let emailRead = 0; let emailSkipped = 0;
   for (const f of files) {
     try {
+      if (/\.(eml|mbox|mbx)$/i.test(f.name) || looksLikeEmail(f.text)) {
+        const r = parseReceipts(f.text, { idPrefix: f.name });
+        if (!r.trips.length) throw new ParseError(`No Uber or Lyft ride receipts found${r.skipped ? ` (${r.skipped} other ${r.skipped === 1 ? 'email' : 'emails'} skipped)` : ''}.`);
+        lists.push(r.trips); sources.add('email');
+        emailRead += r.read; emailSkipped += r.skipped;
+        continue;
+      }
       const r = parseTripsCsv(f.text, { idPrefix: f.name });
       lists.push(r.trips); sources.add(r.source); warnings.push(...r.warnings);
     } catch (e) {
@@ -77,8 +86,11 @@ function loadTexts(files) {
   }
   if (!lists.length) { showLanding(errors.join(' ')); return; }
   state.trips = mergeTrips(lists);
+  if (emailRead) {
+    warnings.push(`Read ${emailRead} receipt ${emailRead === 1 ? 'email' : 'emails'}${emailSkipped ? ` and skipped ${emailSkipped} that weren’t ride receipts` : ''}. Receipts have no coordinates, so those rides count in the stats but don’t appear on the map.`);
+  }
   state.warnings = [...new Set(warnings), ...errors.map((e) => `Skipped ${e}`)];
-  const label = sources.size === 1 ? SOURCE_LABEL[/** @type {keyof typeof SOURCE_LABEL} */ ([...sources][0])] : 'Uber + Lyft';
+  const label = sources.size === 1 ? SOURCE_LABEL[/** @type {keyof typeof SOURCE_LABEL} */ ([...sources][0])] : sources.has('email') ? 'Export + receipts' : 'Uber + Lyft';
   state.source = files.length === 1 ? `${label} · ${files[0].name}` : `${label} · ${files.length} files`;
   if (!prefs.unit) {
     const s = computeStats(state.trips, { unit: 'mi' });

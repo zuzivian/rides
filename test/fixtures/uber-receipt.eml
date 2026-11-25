@@ -1,0 +1,31 @@
+Return-Path: <noreply@uber.com>
+From: "Uber Receipts" <noreply@uber.com>
+To: rider@example.com
+Subject: =?UTF-8?Q?Your_Thursday_evening_trip_with_Uber?=
+Date: Thu, 12 Mar 2026 19:31:07 -0700
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="b1_example"
+
+--b1_example
+Content-Type: text/plain; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+Thanks for riding, Sam
+We hope you enjoyed your ride this evening.
+
+Total $24.86
+Trip fare $19.12
+Booking Fee $3.25
+Visa =E2=80=A2=E2=80=A2=E2=80=A2=E2=80=A2 4242 $24.86
+
+March 12, 2026
+UberX 3.94 miles | 21 min
+7:02 PM | 500 Howard St, San Francisco, CA 94105, US
+7:23 PM | 1200 9th Ave, San Francisco, CA 94122, US
+
+--b1_example
+Content-Type: text/html; charset="UTF-8"
+Content-Transfer-Encoding: quoted-printable
+
+<html><body><table><tr><td>Total</td><td>$24.86</td></tr></table></body></html>
+--b1_example--

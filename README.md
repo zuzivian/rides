@@ -42,9 +42,9 @@ Privacy is the point of this app.
 2. When the email arrives, download the archive and find the ride history CSV.
 3. Load it into Rides.
 
-### Receipt emails *(slice 5)*
+### Receipt emails
 
-You can also load Uber or Lyft receipt emails saved as `.eml` or `.mbox` files. They're parsed in the browser too.
+You can also load Uber or Lyft receipt emails saved as `.eml` files, or a whole `.mbox` export (for example, Google Takeout of a "Rides" label). They're parsed in the browser. Only trip times, addresses, distance, fare and ride type are kept. Names and card digits are ignored. Other emails in an mbox are skipped. Receipts don't include coordinates, so receipt-only rides count in the stats but don't appear on the map. Load them together with your export and duplicates are dropped.
 
 Column names differ between export versions. Rides detects columns by matching many known header names. If it can't find a time column, it shows the headers it found, so you can tell what went wrong. Canceled trips, Uber Eats orders and other non-ride rows are skipped and counted.
 
