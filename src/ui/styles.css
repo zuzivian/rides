@@ -564,3 +564,13 @@ body.story-open { overflow: hidden; }
 .card .spark-wrap { width: 100%; }
 .yb-col { align-items: flex-start; }
 .yb-bar { width: min(100%, 120px); }
+
+/* Basemap (optional, under the arcs) ---------------------------------------- */
+.basemap { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+.basemap-gl { position: absolute; inset: 0; }
+.map-stage.has-basemap .basemap::after { content: ""; position: absolute; inset: 0; background: rgba(7, 9, 14, .28); }
+.map-canvas { z-index: 1; }
+.attrib { position: absolute; left: 8px; bottom: 6px; z-index: 3; font-size: 10px; line-height: 1.3; color: rgba(236, 231, 223, .7); background: rgba(7, 9, 14, .6); padding: 2px 6px; border-radius: 6px; max-width: calc(100% - 170px); }
+.attrib a { color: inherit; text-decoration: none; }
+.attrib a:hover { text-decoration: underline; }
+.attrib[hidden] { display: none; }

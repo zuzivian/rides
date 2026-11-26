@@ -57,3 +57,16 @@ export function robustBounds(pts, trim = 0.02) {
   const k = Math.floor(pts.length * trim);
   return { minX: xs[k], maxX: xs[xs.length - 1 - k], minY: ys[k], maxY: ys[ys.length - 1 - k] };
 }
+
+/** MapLibre draws a 512px tile at zoom 0, so the world is 512·2^zoom px wide. */
+export const MAPLIBRE_TILE = 512;
+
+/**
+ * Map camera (centre in world coords, z = px per world unit) → MapLibre view.
+ * @param {{cx:number, cy:number, z:number}} cam
+ * @returns {{center:[number,number], zoom:number}}
+ */
+export function camToMapLibre(cam) {
+  const [lng, lat] = unproject(cam.cx, cam.cy);
+  return { center: [lng, lat], zoom: Math.log2(cam.z / MAPLIBRE_TILE) };
+}
