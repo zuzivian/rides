@@ -22,7 +22,13 @@ const port = 5180 + Math.floor(Math.random() * 100);
   try {
     for (const [w, h] of [[390, 844], [1280, 800]]) {
       const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, reducedMotion: reduced ? 'reduce' : 'no-preference' });
-      page.on('console', (m) => { if (m.type() === 'error') errors.push(`[${w}] ${m.text()}`); });
+      page.on('console', (m) => {
+        if (m.type() !== 'error') return;
+        // The optional basemap may be unreachable (offline, sandbox); the browser logs that itself and the app falls back.
+        const url = m.location()?.url || '';
+        if (/^Failed to load resource/.test(m.text()) && /^https:\/\/(unpkg\.com\/maplibre-gl@4\.7\.1\/|tiles\.openfreemap\.org\/)/.test(url)) return;
+        errors.push(`[${w}] ${m.text()} ${url}`);
+      });
       page.on('pageerror', (e) => errors.push(`[${w}] ${e.message}`));
       await page.goto(`http://localhost:${port}/`);
       if (sample) {

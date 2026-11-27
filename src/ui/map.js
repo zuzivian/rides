@@ -1,10 +1,13 @@
 // The night map: every ride as a soft arc on a canvas, places as lights,
-// a "replay my year" animation, and tap-a-place details. No tiles and no
-// network requests: everything drawn comes from the user's own rides.
+// a "replay my year" animation, and tap-a-place details. Everything drawn on
+// the canvas comes from the user's own rides. When it loads, an OpenFreeMap
+// basemap (basemap.js) sits underneath and follows this camera; otherwise the
+// canvas draws its own dark background and grid.
 import { project, unproject, arcControl, quadAt, quadSplit, robustBounds, metresPerWorldUnit } from '../core/mercator.js';
 import * as fmt from '../core/format.js';
 import { reducedMotion } from './motion.js';
 import { esc } from './esc.js';
+import { startBasemap, ATTRIBUTION } from './basemap.js';
 
 /** @typedef {import('../core/stats.js').Stats} Stats */
 /** @typedef {import('../core/stats.js').TripView} TripView */
@@ -36,6 +39,7 @@ export function mapSection(s, overlay = '') {
         <button type="button" data-zoom="out" aria-label="Zoom out">−</button>
         <button type="button" data-zoom="fit" aria-label="Fit all rides">⤢</button>
       </div>
+      <div class="attrib" hidden>${ATTRIBUTION}</div>
     </div>
     <div class="replay${overlay ? ' wrap' : ''}">
       <button type="button" class="btn btn-primary btn-small play" data-replay>▶ Replay ${years.length === 1 ? 'my year' : 'my rides'}</button>
@@ -51,7 +55,7 @@ export function mapSection(s, overlay = '') {
       ${cities.length > 1 ? `<div class="chips" role="group" aria-label="Jump to city">${cities.map((c) => `<button type="button" class="chip" data-city="${esc(c.name)}">${esc(c.name)} <span>${c.count}</span></button>`).join('')}</div>` : ''}
     </div>
     <div class="place-panel${overlay ? ' wrap-inset' : ''}" aria-live="polite"></div>
-    <p class="foot${overlay ? ' wrap' : ''}">Brighter arcs are routes you ride more often. Lights are your places, sized by visits. No map tiles are loaded, so the map makes no network requests at all.</p>
+    <p class="foot${overlay ? ' wrap' : ''}">Brighter arcs are routes you ride more often. Lights are your places, sized by visits. <span class="map-net">No map tiles are loaded, so the map makes no network requests at all.</span></p>
   </section>`;
 }
 
@@ -96,12 +100,24 @@ export class RideMap {
     if (memo.selected && !this.placeById.has(memo.selected)) memo.selected = null;
     this.renderPanel();
     this.startIntro();
+    /** @type {import('./basemap.js').Basemap|null} */ this.basemap = null;
+    startBasemap(this.stage, this.cam).then((b) => {
+      if (!b) return;
+      if (this.destroyed) { b.remove(); return; }
+      this.basemap = b;
+      this.stage.classList.add('has-basemap');
+      /** @type {HTMLElement} */ (root.querySelector('.attrib')).hidden = false;
+      const net = root.querySelector('.map-net');
+      if (net) net.textContent = 'The street map comes from OpenFreeMap. Its server sees which map area you view, never your rides.';
+      this.draw();
+    });
   }
 
   destroy() {
     this.destroyed = true;
     if (this.raf) cancelAnimationFrame(this.raf);
     this.resizeObs.disconnect();
+    this.basemap?.remove(); this.basemap = null;
     memo.cam = { ...this.cam };
   }
 
@@ -179,6 +195,7 @@ export class RideMap {
     this.dpr = Math.min(2, window.devicePixelRatio || 1);
     this.w = r.width; this.h = r.height;
     this.canvas.width = Math.round(this.w * this.dpr); this.canvas.height = Math.round(this.h * this.dpr);
+    this.basemap?.resize();
     if (first && !memo.cam) this.fitCity(this.s.cities[0]?.name, false);
     this.draw();
   }
@@ -380,8 +397,10 @@ export class RideMap {
     if (!w) return;
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.globalCompositeOperation = 'source-over';
-    ctx.fillStyle = '#07090e'; ctx.fillRect(0, 0, w, h);
-    this.drawGrid();
+    if (this.basemap) { ctx.clearRect(0, 0, w, h); this.basemap.sync(this.cam); } else {
+      ctx.fillStyle = '#07090e'; ctx.fillRect(0, 0, w, h);
+      this.drawGrid();
+    }
 
     const r = this.replay;
     const now = r ? this.replayNow() : Infinity;
@@ -518,7 +537,7 @@ export class RideMap {
     const target = (90 * mpp) / unitM;
     const nice = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000].reduce((best, v) => (Math.abs(v - target) < Math.abs(best - target) ? v : best));
     const px = (nice * unitM) / mpp;
-    const x = this.w - px - 60; const y = h - 16;
+    const x = this.w - px - 60; const y = h - 16 - (this.basemap ? 34 : 0); // clear the attribution
     ctx.strokeStyle = 'rgba(236, 231, 223, .5)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 5); ctx.stroke();
     ctx.fillStyle = 'rgba(236, 231, 223, .65)'; ctx.font = '10px ui-monospace, SF Mono, Menlo, monospace'; ctx.textBaseline = 'bottom';
