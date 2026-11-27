@@ -4,7 +4,9 @@ import { tripKm } from '../core/stats.js';
 import { personality, distanceComparison, earthShare } from '../core/story.js';
 import { icons, globeSvg, dialsSvg, clockSvg, calendarHtml, priceSpark, emblemSvg } from './visuals.js';
 
+import { localParts, dayKey } from '../core/time.js';
 /** @typedef {import('../core/stats.js').Stats} Stats */
+/** @typedef {import('../core/types.js').Trip} Trip */
 
 import { esc } from './esc.js';
 
@@ -38,7 +40,7 @@ export function heroArt() {
     ${dots}<circle cx="${hx}" cy="${hy}" r="34" fill="url(#glow)"/>${arcs}<circle class="pt" cx="${hx}" cy="${hy}" r="4"/></svg>`;
 }
 
-/** @param {{error?: string}} [o] */
+/** @param {{error?: string, manualCount?: number}} [o] */
 export function landing(o = {}) {
   return `
   <div class="landing wrap">
@@ -46,18 +48,23 @@ export function landing(o = {}) {
     <section class="hero">
       ${heroArt()}
       <h1>Every ride you’ve taken, <em>counted and mapped.</em></h1>
-      <p class="lede">Load your Uber or Lyft data export and see your routes, habits and spending on a night-time map. It all runs on this device. Nothing is uploaded.</p>
+      <p class="lede">Tap where a ride started and where it ended. See it on the map in seconds, then keep adding, or bring in your whole history. It all runs on this device.</p>
       ${o.error ? `<div class="error" role="alert"><strong>That file didn’t work</strong>${esc(o.error)}</div>` : ''}
-      <div class="actions">
-        <label class="btn btn-primary" for="file">Choose your export</label>
-        <button class="btn" type="button" data-action="sample">Try with sample data</button>
+      <div class="actions first-run">
+        <button class="btn btn-primary btn-big" type="button" data-action="add-ride">＋ ${o.manualCount ? 'Add a ride' : 'Add your first ride'}</button>
+        <div class="actions-sub">
+          ${o.manualCount ? `<button class="link" type="button" data-action="my-rides">See your ${fmt.plural(o.manualCount, 'ride')}</button><span aria-hidden="true">·</span>` : ''}
+          <label class="link" for="file">Import your history</label>
+          <span aria-hidden="true">·</span>
+          <button class="link" type="button" data-action="sample">Try with sample data</button>
+        </div>
       </div>
       <input id="file" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple>
       <div class="drop">Or drop your <code>trips_data.csv</code>, or receipt emails (<code>.eml</code> / <code>.mbox</code>), anywhere on this page</div>
       <ul class="promises">
         <li>Parsed in your browser. No server, no account, no analytics.</li>
-        <li>The map is drawn from your rides alone. No map tiles, no third-party requests.</li>
-        <li>Place nicknames are saved on this device only. You can clear them anytime.</li>
+        <li>The street map and place names come from OpenFreeMap tiles. Your rides never leave your device.</li>
+        <li>Rides you add and place nicknames are saved on this device only. You can delete them anytime.</li>
       </ul>
     </section>
     <section class="howto" aria-label="How to get your data">
@@ -110,22 +117,80 @@ export function mapOverlay(s, ctx) {
   return `
     <div class="ov-head">
       <div class="eyebrow"><b>●</b> ${esc(ctx.source)}</div>
-      <div class="ov-big"><span data-count="${s.count}">${fmt.int(s.count)}</span><small>rides</small></div>
+      <div class="ov-big"><span data-count="${s.count}">${fmt.int(s.count)}</span><small>${s.count === 1 ? 'ride' : 'rides'}</small></div>
       <div class="ov-sub">${esc(fmt.dayLabel(s.firstDay))} – ${esc(fmt.dayLabel(s.lastDay))}</div>
-      <button type="button" class="ov-type" data-action="story" data-story-start="type">${icons.spark}<span>${esc(p.title)}</span></button>
+      ${s.count >= TYPE_MIN ? `<button type="button" class="ov-type" data-action="story" data-story-start="type">${icons.spark}<span>${esc(p.title)}</span></button>` : `<button type="button" class="ov-type locked" data-action="add-ride">${icons.spark}<span>Add ${TYPE_MIN - s.count} more ${TYPE_MIN - s.count === 1 ? 'ride' : 'rides'} to unlock your rider type</span></button>`}
     </div>
     <div class="ov-chips">
       <span class="ov-chip">${icons.road}<b data-count="${distV.toFixed(1)}">${fmt.int(distV)}</b>${unit}</span>
-      <span class="ov-chip">${icons.clock}<b data-count="${hours.toFixed(1)}">${fmt.int(hours)}</b>hours</span>
+      ${hours >= 1 ? `<span class="ov-chip">${icons.clock}<b data-count="${hours.toFixed(1)}">${fmt.int(hours)}</b>hours</span>` : `<span class="ov-chip">${icons.clock}<b>${Math.round(s.minutes)}</b>min</span>`}
       ${primary ? `<span class="ov-chip">${icons.coin}<b data-count="${primary.total.toFixed(2)}" data-money="${esc(primary.currency)}">${esc(fmt.money(primary.total, primary.currency, { compact: true }))}</b></span>` : ''}
       <span class="ov-chip">${icons.pin}<b data-count="${s.places.length}">${s.places.length}</b>places</span>
     </div>`;
 }
 
+/** Rides needed before the rider type means anything. */
+export const TYPE_MIN = 4;
+/** Manual rides after which importing the full history is suggested. */
+export const IMPORT_NUDGE = 5;
+const CO2_KG_PER_KM = 0.17; // a typical petrol car, per km
+const WALK_KMH = 5;
+
+/**
+ * The payoff after adding a ride, plus the rides you added.
+ * @param {Stats} s
+ * @param {{all: Trip[], last: Trip[]|null, hasImport: boolean}} m
+ * @param {'mi'|'km'} unit
+ */
+export function addedSection(s, m, unit) {
+  if (!m.all.length) return '';
+  const last = m.last && m.last.length ? m.last : null;
+  const one = last && last.length === 1 ? last[0] : null;
+  const km = one ? one.km || 0 : 0;
+  const mins = one && one.end ? Math.round((one.end - one.start) / 60000) : 0;
+  const cmp = one ? distanceComparison(km) : null;
+  const first = m.all.length === 1 && !m.hasImport;
+  const series = [...new Set(m.all.map((t) => t.series).filter(Boolean))];
+  const singles = m.all.filter((t) => !t.series).slice(-8).reverse();
+  const stop = (/** @type {string} */ a) => esc(a || 'a spot on the map');
+  const head = one
+    ? `<div class="eyebrow">${first ? 'Your first ride on Rides' : 'Ride added'}</div>
+       <h2>${stop(one.fromAddress)} <span class="accent">→</span> ${stop(one.toAddress)}</h2>
+       <div class="facts added-facts">
+         <div class="fact"><div class="eyebrow">Distance</div><div class="v">≈ ${esc(fmt.distance(km, unit))}</div><div class="d">by road, estimated</div></div>
+         <div class="fact"><div class="eyebrow">Time</div><div class="v">≈ ${mins} min</div><div class="d">in the car, estimated</div></div>
+         <div class="fact"><div class="eyebrow">Or on foot</div><div class="v">${esc(fmt.duration((km / WALK_KMH) * 60))}</div><div class="d">at a steady walk</div></div>
+         <div class="fact"><div class="eyebrow">CO₂</div><div class="v">≈ ${(km * CO2_KG_PER_KM).toFixed(1)} kg</div><div class="d">for a typical petrol car${cmp ? `. ${esc(cmp.text)}` : ''}</div></div>
+       </div>`
+    : last ? `<div class="eyebrow">Commute added</div><h2>${last.length} rides, Home ⇄ Work</h2><p class="sub">Estimated from one entry and marked as estimated. Remove them together below.</p>`
+      : `<div class="eyebrow">Rides you added</div><h2>${fmt.plural(m.all.length, 'ride')} on this device</h2>`;
+  const hasCommute = series.some((id) => String(id).startsWith('commute-'));
+  return `
+  <section class="wrap added" aria-labelledby="h-added">
+    <div class="card added-card reveal" id="h-added-card">
+      <div id="h-added">${head}</div>
+      <div class="actions added-actions">
+        <button class="btn btn-primary btn-small" type="button" data-action="add-ride">＋ Add another ride</button>
+        ${hasCommute ? '' : '<button class="btn btn-small" type="button" data-action="add-commute">Add your usual commute (Home ⇄ Work)</button>'}
+      </div>
+      ${!m.hasImport && m.all.length >= IMPORT_NUDGE ? `<div class="nudge"><b>Ready for the whole picture?</b> Import your Uber or Lyft history to see every ride you’ve taken, with real distances and fares, your rider type and your year in rides. <label class="link" for="file-added">Import your full history</label><input id="file-added" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple></div>` : ''}
+      <details class="added-list"${m.all.length <= 3 ? ' open' : ''}>
+        <summary>Rides you added (${m.all.length})</summary>
+        <ul>
+          ${series.map((id) => { const n = m.all.filter((t) => t.series === id).length; return `<li><span>Commute · ${n} estimated rides</span><button type="button" class="btn btn-small btn-ghost" data-delete-series="${esc(String(id))}">Remove all</button></li>`; }).join('')}
+          ${singles.map((t) => `<li><span>${esc(fmt.dayLabel(dayKey(localParts(t.start, t.tz))))} · ${stop(t.fromAddress)} → ${stop(t.toAddress)}</span>
+            <span class="li-actions"><button type="button" class="btn btn-small btn-ghost" data-edit-ride="${esc(t.id)}">Edit</button><button type="button" class="btn btn-small btn-ghost" data-delete-ride="${esc(t.id)}" aria-label="Delete ride">Delete</button></span></li>`).join('')}
+        </ul>
+        <p class="foot">Saved in this browser only. Distances and times are estimates.</p>
+      </details>
+    </div>
+  </section>`;
+}
+
 /**
  * The explore view: map first, then a grid of visual highlights.
  * @param {Stats} s
- * @param {{source: string, unit: 'mi'|'km', allPlaces: boolean, warnings: string[]}} ctx
+ * @param {{source: string, unit: 'mi'|'km', allPlaces: boolean, warnings: string[], manual?: {all: Trip[], last: Trip[]|null, hasImport: boolean}}} ctx
  */
 export function dashboard(s, ctx) {
   const unit = ctx.unit;
@@ -149,15 +214,16 @@ export function dashboard(s, ctx) {
     <button class="btn btn-small btn-ghost" data-action="home" aria-label="Load a different file">New</button>
   </div></header>
 
-  <main class="explore">
+  <main class="explore${ctx.manual && !ctx.manual.hasImport ? ' compact-map' : ''}">
     <section id="map-slot"></section>
+    ${ctx.manual ? addedSection(s, ctx.manual, unit) : ''}
 
     <div class="wrap dash">
-      <section class="card type-card span-4 reveal" aria-labelledby="h-type">
+      ${s.count >= TYPE_MIN ? `<section class="card type-card span-4 reveal" aria-labelledby="h-type">
         <div class="eyebrow">Your rider type</div>
         <div class="type-row">${emblemSvg(p.traits.map((t) => t.key))}<h2 id="h-type">${esc(p.title)}</h2></div>
         <ul class="reason-list">${p.reasons.map((r) => `<li>${esc(r)}</li>`).join('')}</ul>
-      </section>
+      </section>` : ''}
 
       ${s.km > 0 ? `<section class="card vis-card span-4 reveal" aria-labelledby="h-dist">
         <div class="eyebrow">${icons.road} Distance</div>

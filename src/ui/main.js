@@ -9,6 +9,8 @@ import { RideMap, mapSection } from './map.js';
 import { cardSection, mountCard, saveCard } from './card.js';
 import { openStory } from './story.js';
 import { nameFromTiles } from './placenames.js';
+import { openAddRide } from './addride.js';
+import { readManual } from '../core/manual.js';
 
 /** @typedef {import('../core/types.js').Trip} Trip */
 
@@ -17,6 +19,10 @@ const prefs = store.load();
 
 const state = {
   /** @type {Trip[]} */ trips: [],
+  /** Imported from files (or the sample). @type {Trip[]} */ imported: [],
+  /** Added by hand, saved on this device. @type {Trip[]} */ manual: readManual(store.loadManualRaw()),
+  /** The rides just added, for the payoff card. @type {Trip[]|null} */ lastAdded: null,
+  sample: false,
   source: '',
   /** @type {string[]} */ warnings: [],
   /** @type {'mi'|'km'} */ unit: prefs.unit || 'mi',
@@ -36,7 +42,7 @@ function showLanding(error = '') {
   state.stats = null;
   map?.destroy(); map = null;
   app.removeAttribute('data-ready');
-  app.innerHTML = views.landing({ error });
+  app.innerHTML = views.landing({ error, manualCount: state.manual.length });
   window.scrollTo(0, 0);
   animateIn(app, { animate: true });
 }
@@ -54,7 +60,8 @@ function showDashboard(o) {
   if (!state.stats) { showLanding('No rides to show.'); return; }
   const keep = o.keepMap && map ? /** @type {HTMLElement|null} */ (app.querySelector('.map-card')) : null;
   if (keep) keep.remove(); else { map?.destroy(); map = null; }
-  app.innerHTML = views.dashboard(state.stats, { source: state.source, unit: state.unit, allPlaces: state.allPlaces, warnings: state.warnings });
+  const manual = state.sample ? undefined : { all: state.manual, last: state.lastAdded, hasImport: state.imported.length > 0 };
+  app.innerHTML = views.dashboard(state.stats, { source: state.source, unit: state.unit, allPlaces: state.allPlaces, warnings: state.warnings, manual });
   const slot = app.querySelector('#map-slot');
   if (slot && keep && map) { slot.replaceWith(keep); map.updateNames(state.stats); }
   else if (slot && state.stats.places.length) {
@@ -86,8 +93,8 @@ function onGuesses() {
   }, 800));
 }
 
-/** @param {{name: string, text: string}[]} files */
-function loadTexts(files) {
+/** @param {{name: string, text: string}[]} files @param {{sample?: boolean}} [opts] */
+function loadTexts(files, opts = {}) {
   /** @type {Trip[][]} */
   const lists = [];
   /** @type {string[]} */
@@ -111,13 +118,16 @@ function loadTexts(files) {
     }
   }
   if (!lists.length) { showLanding(errors.join(' ')); return; }
-  state.trips = mergeTrips(lists);
+  state.imported = mergeTrips(lists);
+  state.sample = !!opts.sample; state.lastAdded = null;
+  combine();
   if (emailRead) {
     warnings.push(`Read ${emailRead} receipt ${emailRead === 1 ? 'email' : 'emails'}${emailSkipped ? ` and skipped ${emailSkipped} that weren’t ride receipts` : ''}. Receipts have no coordinates, so those rides count in the stats but don’t appear on the map.`);
   }
   state.warnings = [...new Set(warnings), ...errors.map((e) => `Skipped ${e}`)];
   const label = sources.size === 1 ? SOURCE_LABEL[/** @type {keyof typeof SOURCE_LABEL} */ ([...sources][0])] : sources.has('email') ? 'Export + receipts' : 'Uber + Lyft';
   state.source = files.length === 1 ? `${label} · ${files[0].name}` : `${label} · ${files.length} files`;
+  if (state.manual.length && !state.sample) state.source += ` + ${state.manual.length} added`;
   if (!prefs.unit) {
     const s = computeStats(state.trips, { unit: 'mi' });
     state.unit = s && !['USD', 'GBP', ''].includes(s.primaryCurrency) ? 'km' : 'mi';
@@ -146,13 +156,66 @@ async function loadFiles(list) {
   loadTexts(texts);
 }
 
+/** Imported rides plus the ones added by hand (the sample stays on its own). */
+function combine() {
+  state.trips = state.sample ? state.imported : mergeTrips([state.imported, state.manual]);
+}
+
 async function loadSample() {
   const res = await fetch(new URL('../../data/sample-trips.csv', import.meta.url));
   const text = await res.text();
-  loadTexts([{ name: 'sample-trips.csv', text }]);
+  loadTexts([{ name: 'sample-trips.csv', text }], { sample: true });
   state.source = 'Sample data · a made-up rider in San Francisco';
   const eyebrow = app.querySelector('.ov-head .eyebrow');
   if (eyebrow) eyebrow.innerHTML = `<b>●</b> ${views.esc(state.source)}`;
+}
+
+// Rides added by hand ---------------------------------------------------------
+
+/** Quick picks and a starting point for the add sheet. */
+function sheetContext() {
+  const places = state.sample ? [] : state.stats?.places || [];
+  const pick = (/** @type {string} */ kind, /** @type {string} */ name) => {
+    const p = places.find((x) => x.kind === kind);
+    if (p) return { lat: p.lat, lng: p.lng };
+    for (const t of state.manual) {
+      if (t.fromAddress === name) return { lat: /** @type {number} */ (t.fromLat), lng: /** @type {number} */ (t.fromLng) };
+      if (t.toAddress === name) return { lat: /** @type {number} */ (t.toLat), lng: /** @type {number} */ (t.toLng) };
+    }
+    return undefined;
+  };
+  const last = state.manual[state.manual.length - 1];
+  const near = last ? { lat: /** @type {number} */ (last.fromLat), lng: /** @type {number} */ (last.fromLng) } : places[0] ? { lat: places[0].lat, lng: places[0].lng } : undefined;
+  return { known: { home: pick('home', 'Home'), work: pick('work', 'Work') }, near };
+}
+
+/** @param {'ride'|'commute'} mode @param {Trip} [edit] */
+function addRide(mode, edit) {
+  openAddRide({
+    mode, edit, ...sheetContext(),
+    onSave: (trips, o) => {
+      const keep = state.manual.filter((t) => t.id !== o.replaces && !trips.some((n) => n.id === t.id));
+      state.manual = [...keep, ...trips].sort((a, b) => a.start - b.start);
+      store.saveManual(state.manual);
+      state.lastAdded = trips;
+      if (state.sample) { state.sample = false; state.imported = []; }
+      if (!state.imported.length) state.source = 'Rides you added on this device';
+      combine();
+      showDashboard({ animate: false });
+      map?.focusTrips(trips);
+      /** @type {HTMLElement|null} */ (app.querySelector('#h-added-card'))?.focus({ preventScroll: true });
+    },
+  });
+}
+
+/** @param {(t: Trip) => boolean} drop */
+function removeManual(drop) {
+  state.manual = state.manual.filter((t) => !drop(t));
+  store.saveManual(state.manual);
+  state.lastAdded = null;
+  combine();
+  if (!state.trips.length) { showLanding(); return; }
+  showDashboard({ animate: false, keepScroll: true });
 }
 
 /** @param {HTMLButtonElement} btn */
@@ -188,6 +251,14 @@ app.addEventListener('click', (e) => {
   if (!t) return;
   const action = t.closest('[data-action]')?.getAttribute('data-action');
   if (action === 'sample') { loadSample(); return; }
+  if (action === 'add-ride') { addRide('ride'); return; }
+  if (action === 'add-commute') { addRide('commute'); return; }
+  const editId = t.closest('[data-edit-ride]')?.getAttribute('data-edit-ride');
+  if (editId) { const tr = state.manual.find((x) => x.id === editId); if (tr) addRide('ride', tr); return; }
+  const delId = t.closest('[data-delete-ride]')?.getAttribute('data-delete-ride');
+  if (delId) { removeManual((x) => x.id === delId); return; }
+  const delSeries = t.closest('[data-delete-series]')?.getAttribute('data-delete-series');
+  if (delSeries) { removeManual((x) => x.series === delSeries); return; }
   if (action === 'story') { playStory(t.closest('[data-story-start]')?.getAttribute('data-story-start') || undefined); return; }
   const cityBtn = t.closest('[data-city]');
   if (cityBtn && !t.closest('.map-card') && map) {
@@ -196,6 +267,7 @@ app.addEventListener('click', (e) => {
     return;
   }
   if (action === 'home') { showLanding(); return; }
+  if (action === 'my-rides') { state.imported = []; state.sample = false; state.lastAdded = null; state.source = 'Rides you added on this device'; combine(); showDashboard({ animate: true }); return; }
   if (action === 'all-places') { state.allPlaces = !state.allPlaces; showDashboard({ animate: false, keepScroll: true }); return; }
   if (action === 'reset-names') { state.names = {}; state.guesses = {}; store.save({ names: {}, unit: prefs.unit }); store.clearGuesses(); showDashboard({ animate: false, keepScroll: true }); return; }
   const unitBtn = t.closest('[data-unit]');
@@ -223,4 +295,6 @@ window.addEventListener('drop', (e) => {
 });
 
 installTooltip();
-if (new URLSearchParams(location.search).has('sample')) loadSample(); else showLanding();
+if (new URLSearchParams(location.search).has('sample')) loadSample();
+else if (state.manual.length) { state.source = 'Rides you added on this device'; combine(); showDashboard({ animate: true }); }
+else showLanding();
