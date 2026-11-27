@@ -116,6 +116,14 @@ export class RideMap {
     });
   }
 
+  /** New names, same rides: update labels and the panel without rebuilding the map. @param {Stats} stats */
+  updateNames(stats) {
+    this.s = stats;
+    for (const p of stats.places) { const q = this.placeById.get(p.id); if (q) Object.assign(q, { name: p.name, nameSource: p.nameSource, topPartners: p.topPartners }); }
+    this.renderPanel();
+    this.draw();
+  }
+
   destroy() {
     this.destroyed = true;
     if (this.raf) cancelAnimationFrame(this.raf);

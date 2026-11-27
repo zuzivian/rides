@@ -196,7 +196,8 @@ export function dashboard(s, ctx) {
             ${s.places.length > 6 ? `<button class="btn btn-small" data-action="all-places">${ctx.allPlaces ? 'Show fewer' : `Show all ${s.places.length}`}</button>` : ''}
             <button class="btn btn-small btn-ghost" data-action="reset-names">Reset names</button>
           </div>` : '<p class="foot">Receipt-only rides have no coordinates, so there are no places to name.</p>'}
-        ${s.places.some((pl) => pl.nameSource === 'pattern' || pl.nameSource === 'area') ? '<p class="foot">Places without an address are named from when you ride there ("Work?", "Late nights") and how far they are from Home or the city centre. Those are guesses: tap ✎ to name them.</p>' : ''}
+        <p class="foot">Place names come from OpenFreeMap map tiles for the areas you ride in; your rides never leave your device.</p>
+        ${s.places.some((pl) => pl.nameSource === 'pattern' || pl.nameSource === 'area') ? '<p class="foot">Where the map has no name nearby, places are named from when you ride there ("Work?", "Late nights") and how far they are from Home. Tap ✎ to name them.</p>' : ''}
         <p class="foot">Nicknames stay on this device.</p>
       </section>
 

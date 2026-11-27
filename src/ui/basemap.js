@@ -196,5 +196,6 @@ export class Basemap {
 
   resize() { try { this.map.resize(); this.key = ''; } catch { /* ignore */ } }
 
+
   remove() { try { this.map.remove(); } catch { /* ignore */ } this.host.remove(); }
 }

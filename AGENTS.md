@@ -8,7 +8,7 @@ Rides is a client-only web app that parses a person's own Uber or Lyft export an
 
 ## Hard rules
 
-1. **No network calls with user data.** No server, no analytics, no remote fonts. The CSP in `index.html` enforces this. The only third-party requests allowed are for the optional basemap: the MapLibre script and stylesheet (see rule 3) and the style, tiles, glyphs and sprites from `tiles.openfreemap.org`. Tile URLs carry tile numbers for the area on screen, never ride data.
+1. **No network calls with user data.** No server, no analytics, no remote fonts. The CSP in `index.html` enforces this. The only third-party requests allowed are for the optional basemap: the MapLibre script and stylesheet (see rule 3) and the style, tiles, glyphs and sprites from `tiles.openfreemap.org`. Tile URLs carry only tile z/x/y numbers, never ride data or coordinates. They cover the area on screen and, to name places (Nat's decision, 26 Nov 2026), the z14 tile around each of the user's own places.
 2. **Never commit real ride data.** Use `data/sample-trips.csv` (synthetic, generated) or files under `private/` (git-ignored).
 3. **No runtime dependencies from CDNs, with one exception.** If a library is needed, vendor a pinned copy into `public/vendor/` with its licence. The exception is MapLibre GL, loaded lazily from `https://unpkg.com/maplibre-gl@4.7.1/` (exact version, see `DECISIONS.md`). The map must keep working without it. `npm run build` fails on any other remote script, stylesheet or CSP host.
 4. **`src/core/` stays pure.** It has no DOM, no `fetch`, no `localStorage` and no Node APIs, so it runs in the browser, in `node --test`, and can be ported to Swift one file at a time.
@@ -29,7 +29,9 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   email.js            .eml/.mbox → MIME → receipt text → Trip[] (Uber/Lyft heuristics)
   story.js            rider type (rule-based personality) and real-world distance comparisons
   mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
-src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), basemap.js (optional MapLibre basemap), story.js (full-screen story), scene.js (arc scenes),
+  placeguess.js       name a place from nearby map features (POI, address, street, neighbourhood)
+  mvt.js              minimal Mapbox Vector Tile reader (and a writer for test fixtures)
+src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), basemap.js (optional MapLibre basemap), placenames.js (names places from OpenFreeMap z14 tiles), story.js (full-screen story), scene.js (arc scenes),
                       visuals.js (SVG globe/dials/clock/calendar/etc.), card.js (share card PNG),
                       motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css
 data/sample-trips.csv synthetic rider, about 300 trips, May 2025 – Oct 2026
