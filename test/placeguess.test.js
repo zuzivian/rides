@@ -20,7 +20,7 @@ const feats = (...rs) => [
   ...toMapFeatures(rs.filter((r) => r.layer === 'place').map((r) => r.f), 'place'),
 ];
 
-test('pickPlaceName: closest prominent POI within the radius, as "near …"', () => {
+test('pickPlaceName: closest prominent POI within the radius, by its plain name', () => {
   const f = feats(
     raw('poi', 'Whole Foods Market', 60, 0, { class: 'grocery', rank: 5 }),
     raw('poi', 'Tiny Cafe', 50, 10, { class: 'cafe', rank: 40 }),
@@ -29,7 +29,7 @@ test('pickPlaceName: closest prominent POI within the radius, as "near …"', ()
   );
   const g = pickPlaceName(P.lat, P.lng, f);
   assert.equal(g?.kind, 'poi');
-  assert.equal(g?.name, 'near Whole Foods Market'); // rank breaks the near-tie with the closer, minor cafe
+  assert.equal(g?.name, 'Whole Foods Market'); // rank breaks the near-tie with the closer, minor cafe
 });
 
 test('pickPlaceName: a POI right at the spot is named plainly', () => {
@@ -129,12 +129,12 @@ test('mvt: writeTile → readTile round-trips names, classes and lng/lat within 
   assert.deepEqual(decodeGeometry([9, 2, 4]), [[[1, 2]]]); // MoveTo(+1,+2) zigzag
 });
 
-test('pickPlaceName on a decoded tile: POI at the door > address > near POI > intersection > neighbourhood', () => {
+test('pickPlaceName on a decoded tile: POI at the door > address > nearby POI > intersection > neighbourhood', () => {
   const feats = (bytes) => { const l = readTile(bytes, T, TILE_LAYERS); return TILE_LAYERS.flatMap((k) => toMapFeatures(l[k] || [], k)); };
   assert.equal(pickPlaceName(P.lat, P.lng, feats(fixtureTile({ poiAt: 20 })))?.name, 'Whole Foods Market');
   assert.deepEqual(pickPlaceName(P.lat, P.lng, feats(fixtureTile({ poiAt: 60 }))), { name: '1200 9th Avenue', kind: 'address', metres: 9 });
   const noHouse = feats(fixtureTile()).filter((f) => f.layer !== 'housenumber');
-  assert.equal(pickPlaceName(P.lat, P.lng, noHouse)?.name, 'near Whole Foods Market');
+  assert.equal(pickPlaceName(P.lat, P.lng, noHouse)?.name, 'Whole Foods Market');
   const streetsOnly = noHouse.filter((f) => f.layer !== 'poi');
   assert.deepEqual(pickPlaceName(P.lat, P.lng, streetsOnly), { name: '9th Avenue & Irving Street', kind: 'street', metres: 20 });
   assert.equal(pickPlaceName(P.lat, P.lng, streetsOnly.filter((f) => f.layer === 'place'))?.name, 'Inner Sunset');
