@@ -1,5 +1,5 @@
 // Cluster pickup/dropoff points into named places. Pure.
-import { haversineKm, airportAt, airportInText, isCoord } from './geo.js';
+import { haversineKm, airportAt, airportInText, isCoord, metroAt, METROS } from './geo.js';
 import { localParts } from './time.js';
 
 /** @typedef {import('./types.js').Trip} Trip */
@@ -9,6 +9,7 @@ import { localParts } from './time.js';
  * @property {string} id         Stable key from the rounded centroid; used for renames.
  * @property {string} name       Display name (user rename > auto name).
  * @property {string} autoName
+ * @property {'nickname'|'kind'|'address'|'pattern'|'area'} nameSource  Where `name` came from. 'pattern' and 'area' are guesses worth renaming.
  * @property {'home'|'work'|'airport'|'place'} kind
  * @property {number} lat
  * @property {number} lng
@@ -24,7 +25,7 @@ const RADIUS_KM = 0.25;
  * Leader clustering with centroid refinement. Airport points snap to the
  * airport so every terminal counts as one place.
  * @param {Trip[]} trips
- * @param {{names?: Record<string,string>, radiusKm?: number}} [opts]
+ * @param {{names?: Record<string,string>, radiusKm?: number, unit?: 'mi'|'km'}} [opts]
  * @returns {{places: Place[], fromPlace: (string|null)[], toPlace: (string|null)[]}}
  */
 export function clusterPlaces(trips, opts = {}) {
@@ -107,6 +108,25 @@ export function clusterPlaces(trips, opts = {}) {
   });
   if (work !== -1 && workScore[work] < 6) work = -1;
 
+  // Reference points for area labels: Home when it's in the same metro, else the
+  // visit-weighted centre of this rider's places in that metro.
+  const metroOf = clusters.map((c) => metroAt(c.lat, c.lng)?.name || '');
+  /** @type {Map<string, {lat:number, lng:number, w:number}>} */
+  const centres = new Map();
+  clusters.forEach((c, i) => {
+    if (!metroOf[i]) return;
+    const m = centres.get(metroOf[i]) || { lat: 0, lng: 0, w: 0 };
+    m.lat += c.lat * c.n; m.lng += c.lng * c.n; m.w += c.n; centres.set(metroOf[i], m);
+  });
+  /** @param {number} i */
+  const refFor = (i) => {
+    const metro = metroOf[i];
+    if (!metro) return null;
+    if (home !== -1 && metroOf[home] === metro) return { lat: clusters[home].lat, lng: clusters[home].lng, label: 'of Home' };
+    const m = /** @type {{lat:number,lng:number,w:number}} */ (centres.get(metro));
+    return { lat: m.lat / m.w, lng: m.lng / m.w, label: '' };
+  };
+
   const names = opts.names || {};
   /** @type {Map<string, number>} */
   const used = new Map();
@@ -119,11 +139,21 @@ export function clusterPlaces(trips, opts = {}) {
     if (c.airport) { kind = 'airport'; autoName = c.airport; }
     else if (i === home) { kind = 'home'; autoName = 'Home'; }
     else if (i === work) { kind = 'work'; autoName = 'Work'; }
-    else autoName = nameFromAddresses(c.addresses) || `Spot ${i + 1}`;
+    /** @type {Place['nameSource']} */
+    let source = 'kind';
+    if (!autoName) {
+      autoName = nameFromAddresses(c.addresses); source = 'address';
+      if (!autoName) {
+        const pattern = patternLabel(c.members.map((m) => ({ trip: trips[m.trip], end: m.end })));
+        const area = areaLabel(c.lat, c.lng, opts.unit || 'mi', refFor(i));
+        autoName = pattern ? `${pattern} · ${area}` : area;
+        source = pattern ? 'pattern' : 'area';
+      }
+    }
     const n = (used.get(autoName) || 0) + 1; used.set(autoName, n);
     if (n > 1) autoName = `${autoName} (${n})`;
     return {
-      id, kind, autoName, name: names[id] || autoName,
+      id, kind, autoName, name: names[id] || autoName, nameSource: names[id] ? 'nickname' : source,
       lat: c.lat, lng: c.lng, visits: c.n, pickups: c.pickups, dropoffs: c.dropoffs, airportCode: c.airport,
     };
   });
@@ -135,16 +165,96 @@ export function clusterPlaces(trips, opts = {}) {
   };
 }
 
+/** Address text that names nothing: blanks, placeholders, bare coordinates. */
+const JUNK_ADDRESS = /^\s*(|-|n\/?a|null|none|unknown|undefined|\(?-?\d{1,3}\.\d+\s*,\s*-?\d{1,3}\.\d+\)?)\s*$/i;
+
 /**
- * Turn the most common address into a short label: "1234 Valencia St, San
- * Francisco, CA" → "Valencia St". Venue names (no leading number) are kept.
+ * Short label for one address: "1234 Valencia St, San Francisco, CA" →
+ * "Valencia St"; "9th Ave & Irving St, SF" → "9th Ave & Irving St"; venue
+ * names ("Salesforce Tower, 415 Mission St") are kept. '' if nothing usable.
+ * @param {string} address
+ */
+export function shortAddress(address) {
+  const a = String(address || '').replace(/\s+/g, ' ').trim();
+  if (JUNK_ADDRESS.test(a)) return '';
+  const parts = a.split(/\s*[,\n;]\s*/).filter(Boolean);
+  for (const part of parts.slice(0, 2)) {
+    let p = part
+      .replace(/^(unit|apt|suite|ste|#)\s*\S+\s+/i, '')
+      .replace(/^\d+[A-Za-z]?(?:\s*[-–]\s*\d+[A-Za-z]?)?\s+/, '') // house number or range
+      .replace(/\s+(#|unit|apt|suite|ste)\s*\S+$/i, '')
+      .trim();
+    if (!p || /^\d+[A-Za-z]?$/.test(p) || JUNK_ADDRESS.test(p)) continue; // "1200" alone, then try the next part
+    if (/^[A-Z]{2}\s+\d{4,5}/.test(p)) continue; // "CA 94110"
+    return p.length > 28 ? `${p.slice(0, 27)}…` : p;
+  }
+  return '';
+}
+
+/**
+ * The most common short label among a place's addresses, so "500 Howard St"
+ * and "510 Howard St" both count towards "Howard St".
  * @param {Map<string, number>} addresses
  */
 export function nameFromAddresses(addresses) {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const [a, n] of addresses) {
+    const s = shortAddress(a);
+    if (s) counts.set(s, (counts.get(s) || 0) + n);
+  }
   let best = ''; let bestN = 0;
-  for (const [a, n] of addresses) if (n > bestN) { best = a; bestN = n; }
-  if (!best) return '';
-  const first = best.split(',')[0].trim();
-  const street = first.replace(/^\d+[A-Za-z]?(-\d+)?\s+/, '').replace(/^(unit|apt|suite)\s+\S+\s+/i, '');
-  return street.length > 28 ? `${street.slice(0, 27)}…` : street;
+  for (const [s, n] of counts) if (n > bestN) { best = s; bestN = n; }
+  return best;
+}
+
+/**
+ * A guess from when rides start or end here, for places without addresses.
+ * Needs at least 3 visits and a clear majority, otherwise ''.
+ * @param {{trip: Trip, end: 'from'|'to'}[]} members
+ */
+export function patternLabel(members) {
+  const n = members.length;
+  if (n < 3) return '';
+  let work = 0; let late = 0; let weekend = 0; let gym = 0;
+  for (const { trip, end } of members) {
+    const t = end === 'to' && trip.end != null ? trip.end : trip.start;
+    const p = localParts(t, trip.tz);
+    const weekday = p.weekday < 5;
+    if (weekday && ((end === 'to' && p.hour >= 7 && p.hour < 10) || (end === 'from' && p.hour >= 16 && p.hour < 19))) work++;
+    if (p.hour >= 22 || p.hour < 3) late++;
+    if (!weekday) weekend++;
+    if (p.hour >= 5 && p.hour < 8 && trip.km != null && trip.km < 5) gym++;
+  }
+  if (gym / n >= 0.5) return 'Gym?';
+  if (work / n >= 0.5) return 'Work?';
+  if (late / n >= 0.5) return 'Late nights';
+  if (weekend / n >= 0.7) return 'Weekends';
+  return '';
+}
+
+const SHORT_METRO = /** @type {Record<string, string>} */ ({ 'San Francisco Bay Area': 'SF', 'Los Angeles': 'LA', 'New York': 'NYC', 'Washington, DC': 'DC', 'Mexico City': 'CDMX', 'Hong Kong': 'HK' });
+const COMPASS = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+
+/**
+ * Where a place sits: "0.8 mi NE of Home" when Home is in the same metro,
+ * otherwise "London · 1.2 mi SW" from the centre of the rider's places there
+ * (or from the metro centre when no reference is given). Outside known
+ * metros, a rounded coordinate.
+ * @param {number} lat @param {number} lng @param {'mi'|'km'} [unit]
+ * @param {{lat:number, lng:number, label:string}|null} [ref]
+ */
+export function areaLabel(lat, lng, unit = 'mi', ref = null) {
+  const metro = metroAt(lat, lng);
+  const row = metro && METROS.find((m) => m[0] === metro.name);
+  if (!row) return `${Math.abs(lat).toFixed(2)}°${lat >= 0 ? 'N' : 'S'} ${Math.abs(lng).toFixed(2)}°${lng >= 0 ? 'E' : 'W'}`;
+  const city = SHORT_METRO[row[0]] || row[0];
+  const o = ref || { lat: row[1], lng: row[2], label: '' };
+  const km = haversineKm(o.lat, o.lng, lat, lng);
+  const dist = unit === 'km' ? km : km / 1.609344;
+  if (dist < 0.15) return o.label ? `Next to Home` : `${city} · centre`;
+  const y = lat - o.lat; const x = (lng - o.lng) * Math.cos((lat * Math.PI) / 180);
+  const dir = COMPASS[Math.round(((Math.atan2(x, y) * 180) / Math.PI + 360) % 360 / 45) % 8];
+  const d = dist < 10 ? dist.toFixed(1) : String(Math.round(dist));
+  return o.label ? `${d} ${unit} ${dir} ${o.label}` : `${city} · ${d} ${unit} ${dir}`;
 }

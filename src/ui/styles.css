@@ -567,7 +567,9 @@ body.story-open { overflow: hidden; }
 
 /* Basemap (optional, under the arcs) ---------------------------------------- */
 .basemap { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
-.basemap-gl { position: absolute; inset: 0; }
+/* Two classes so this beats maplibre-gl.css (.maplibregl-map { position: relative }), which loads later. */
+.basemap .basemap-gl { position: absolute; inset: 0; width: 100%; height: 100%; }
+.basemap-invert .basemap-gl canvas { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
 .map-stage.has-basemap .basemap::after { content: ""; position: absolute; inset: 0; background: rgba(7, 9, 14, .28); }
 .map-canvas { z-index: 1; }
 .attrib { position: absolute; right: 8px; bottom: 6px; z-index: 3; font-size: 10px; line-height: 1.35; text-align: right; color: rgba(236, 231, 223, .72); background: rgba(7, 9, 14, .6); padding: 2px 6px; border-radius: 6px; max-width: min(46%, 330px); }
@@ -575,3 +577,7 @@ body.story-open { overflow: hidden; }
 .attrib a:hover { text-decoration: underline; }
 .attrib[hidden] { display: none; }
 @media (max-width: 640px) { .attrib { bottom: 2px; right: 6px; max-width: none; white-space: nowrap; font-size: 9px; padding: 1px 5px; } }
+.map-status { font: 11px/1.4 var(--mono); color: var(--faint); margin: 6px 0 0; overflow-wrap: anywhere; }
+.map-status b { font-weight: 600; color: var(--muted); }
+.map-card > .map-status { padding: 0 18px 16px; margin-top: -10px; }
+.map-card.map-hero > .map-status { padding-top: 0; }

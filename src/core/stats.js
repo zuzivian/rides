@@ -29,7 +29,7 @@ const EARTH_KM = 40075;
 export function computeStats(trips, opts = {}) {
   const unit = opts.unit || 'mi';
   const sorted = [...trips].sort((a, b) => a.start - b.start);
-  const { places, fromPlace, toPlace } = clusterPlaces(sorted, { names: opts.names });
+  const { places, fromPlace, toPlace } = clusterPlaces(sorted, { names: opts.names, unit });
   const placeById = new Map(places.map((p) => [p.id, p]));
 
   /** @type {TripView[]} */

@@ -56,6 +56,7 @@ export function mapSection(s, overlay = '') {
     </div>
     <div class="place-panel${overlay ? ' wrap-inset' : ''}" aria-live="polite"></div>
     <p class="foot${overlay ? ' wrap' : ''}">Brighter arcs are routes you ride more often. Lights are your places, sized by visits. <span class="map-net">No map tiles are loaded, so the map makes no network requests at all.</span></p>
+    <p class="map-status${overlay ? ' wrap' : ''}" aria-live="polite">Street map: <b>loading…</b></p>
   </section>`;
 }
 
@@ -101,9 +102,11 @@ export class RideMap {
     this.renderPanel();
     this.startIntro();
     /** @type {import('./basemap.js').Basemap|null} */ this.basemap = null;
-    startBasemap(this.stage, this.cam).then((b) => {
+    const status = /** @type {HTMLElement} */ (root.querySelector('.map-status'));
+    startBasemap(this.stage, this.cam).then(({ basemap: b, reason, styleId }) => {
+      if (this.destroyed) { b?.remove(); return; }
+      status.innerHTML = b ? `Street map: <b>on</b> (OpenFreeMap ${esc(styleId || '')})` : `Street map: <b>off</b>: ${esc(reason)}. Showing rides only.`;
       if (!b) return;
-      if (this.destroyed) { b.remove(); return; }
       this.basemap = b;
       this.stage.classList.add('has-basemap');
       /** @type {HTMLElement} */ (root.querySelector('.attrib')).hidden = false;
