@@ -20,6 +20,8 @@ const state = {
   /** @type {string[]} */ warnings: [],
   /** @type {'mi'|'km'} */ unit: prefs.unit || 'mi',
   names: prefs.names,
+  /** Names guessed from map labels: per device, names only. */
+  guesses: store.loadGuesses(),
   allPlaces: false,
   /** @type {ReturnType<typeof computeStats>} */ stats: null,
 };
@@ -38,27 +40,48 @@ function showLanding(error = '') {
   animateIn(app, { animate: true });
 }
 
-/** @param {{animate: boolean, keepScroll?: boolean}} o */
+const guessNames = () => Object.fromEntries(Object.entries(state.guesses).map(([id, g]) => [id, g.name]));
+
+/**
+ * @param {{animate: boolean, keepScroll?: boolean, keepMap?: boolean}} o
+ * keepMap: only names changed, so move the live map (and its basemap) into
+ * the new page instead of rebuilding it.
+ */
 function showDashboard(o) {
   const y = window.scrollY;
-  state.stats = computeStats(state.trips, { names: state.names, unit: state.unit });
+  state.stats = computeStats(state.trips, { names: state.names, guesses: guessNames(), unit: state.unit });
   if (!state.stats) { showLanding('No rides to show.'); return; }
-  map?.destroy(); map = null;
+  const keep = o.keepMap && map ? /** @type {HTMLElement|null} */ (app.querySelector('.map-card')) : null;
+  if (keep) keep.remove(); else { map?.destroy(); map = null; }
   app.innerHTML = views.dashboard(state.stats, { source: state.source, unit: state.unit, allPlaces: state.allPlaces, warnings: state.warnings });
   const slot = app.querySelector('#map-slot');
-  if (slot && state.stats.places.length) {
+  if (slot && keep && map) { slot.replaceWith(keep); map.updateNames(state.stats); }
+  else if (slot && state.stats.places.length) {
     slot.outerHTML = mapSection(state.stats, views.mapOverlay(state.stats, { source: state.source, unit: state.unit }));
-    map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats);
+    map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats, { guesses: state.guesses, onGuesses });
   } else slot?.remove();
   const before = app.querySelector('.note-honest');
   if (before) {
     before.insertAdjacentHTML('beforebegin', cardSection(state.stats));
-    mountCard(/** @type {HTMLElement} */ (app.querySelector('.share-card')), state.trips, { names: state.names, unit: state.unit });
+    mountCard(/** @type {HTMLElement} */ (app.querySelector('.share-card')), state.trips, { names: state.names, guesses: guessNames(), unit: state.unit });
   }
   app.setAttribute('data-ready', '');
   if (o.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
-  animateIn(app, { animate: o.animate });
+  animateIn(app, { animate: o.animate && !keep });
   document.dispatchEvent(new CustomEvent('rides:render', { detail: state }));
+}
+
+// New map-label guesses: save them, then refresh names on the page. Batched,
+// and held while the user is typing a nickname.
+let guessTimer = 0;
+function onGuesses() {
+  store.saveGuesses(state.guesses);
+  clearTimeout(guessTimer);
+  guessTimer = /** @type {any} */ (setTimeout(function apply() {
+    if (!state.stats) return;
+    if (document.activeElement instanceof HTMLInputElement && app.contains(document.activeElement)) { guessTimer = /** @type {any} */ (setTimeout(apply, 1500)); return; }
+    showDashboard({ animate: false, keepScroll: true, keepMap: true });
+  }, 800));
 }
 
 /** @param {{name: string, text: string}[]} files */
@@ -172,7 +195,7 @@ app.addEventListener('click', (e) => {
   }
   if (action === 'home') { showLanding(); return; }
   if (action === 'all-places') { state.allPlaces = !state.allPlaces; showDashboard({ animate: false, keepScroll: true }); return; }
-  if (action === 'reset-names') { state.names = {}; store.save({ names: {}, unit: prefs.unit }); showDashboard({ animate: false, keepScroll: true }); return; }
+  if (action === 'reset-names') { state.names = {}; state.guesses = {}; store.save({ names: {}, unit: prefs.unit }); store.clearGuesses(); showDashboard({ animate: false, keepScroll: true }); return; }
   const unitBtn = t.closest('[data-unit]');
   if (unitBtn) {
     const u = /** @type {'mi'|'km'} */ (unitBtn.getAttribute('data-unit'));

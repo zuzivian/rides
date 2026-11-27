@@ -9,7 +9,7 @@ import { localParts } from './time.js';
  * @property {string} id         Stable key from the rounded centroid; used for renames.
  * @property {string} name       Display name (user rename > auto name).
  * @property {string} autoName
- * @property {'nickname'|'kind'|'address'|'pattern'|'area'} nameSource  Where `name` came from. 'pattern' and 'area' are guesses worth renaming.
+ * @property {'nickname'|'kind'|'address'|'guess'|'pattern'|'area'} nameSource  Where `name` came from. 'guess' (from nearby map labels), 'pattern' and 'area' are guesses worth renaming.
  * @property {'home'|'work'|'airport'|'place'} kind
  * @property {number} lat
  * @property {number} lng
@@ -25,7 +25,7 @@ const RADIUS_KM = 0.25;
  * Leader clustering with centroid refinement. Airport points snap to the
  * airport so every terminal counts as one place.
  * @param {Trip[]} trips
- * @param {{names?: Record<string,string>, radiusKm?: number, unit?: 'mi'|'km'}} [opts]
+ * @param {{names?: Record<string,string>, guesses?: Record<string,string>, radiusKm?: number, unit?: 'mi'|'km'}} [opts]
  * @returns {{places: Place[], fromPlace: (string|null)[], toPlace: (string|null)[]}}
  */
 export function clusterPlaces(trips, opts = {}) {
@@ -143,12 +143,19 @@ export function clusterPlaces(trips, opts = {}) {
     let source = 'kind';
     if (!autoName) {
       autoName = nameFromAddresses(c.addresses); source = 'address';
+      const guess = opts.guesses?.[id];
+      if (!autoName && guess) { autoName = guess; source = 'guess'; }
       if (!autoName) {
         const pattern = patternLabel(c.members.map((m) => ({ trip: trips[m.trip], end: m.end })));
         const area = areaLabel(c.lat, c.lng, opts.unit || 'mi', refFor(i));
         autoName = pattern ? `${pattern} · ${area}` : area;
         source = pattern ? 'pattern' : 'area';
       }
+    }
+    if (source === 'guess' && used.has(autoName)) {
+      // Several places in one neighbourhood: tell them apart by when you go.
+      const pattern = patternLabel(c.members.map((m) => ({ trip: trips[m.trip], end: m.end })));
+      if (pattern) autoName = `${autoName} · ${pattern}`;
     }
     const n = (used.get(autoName) || 0) + 1; used.set(autoName, n);
     if (n > 1) autoName = `${autoName} (${n})`;

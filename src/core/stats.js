@@ -24,12 +24,12 @@ const EARTH_KM = 40075;
 
 /**
  * @param {Trip[]} trips
- * @param {{names?: Record<string,string>, unit?: 'mi'|'km'}} [opts]
+ * @param {{names?: Record<string,string>, guesses?: Record<string,string>, unit?: 'mi'|'km'}} [opts]
  */
 export function computeStats(trips, opts = {}) {
   const unit = opts.unit || 'mi';
   const sorted = [...trips].sort((a, b) => a.start - b.start);
-  const { places, fromPlace, toPlace } = clusterPlaces(sorted, { names: opts.names, unit });
+  const { places, fromPlace, toPlace } = clusterPlaces(sorted, { names: opts.names, guesses: opts.guesses, unit });
   const placeById = new Map(places.map((p) => [p.id, p]));
 
   /** @type {TripView[]} */

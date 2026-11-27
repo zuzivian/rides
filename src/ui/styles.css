@@ -581,3 +581,4 @@ body.story-open { overflow: hidden; }
 .map-status b { font-weight: 600; color: var(--muted); }
 .map-card > .map-status { padding: 0 18px 16px; margin-top: -10px; }
 .map-card.map-hero > .map-status { padding-top: 0; }
+.places .name .guess { color: var(--sodium); font-weight: 700; margin-right: 3px; }

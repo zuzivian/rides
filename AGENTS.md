@@ -29,6 +29,7 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   email.js            .eml/.mbox → MIME → receipt text → Trip[] (Uber/Lyft heuristics)
   story.js            rider type (rule-based personality) and real-world distance comparisons
   mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
+  placeguess.js       name a place from nearby map labels (POIs, neighbourhoods)
 src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), basemap.js (optional MapLibre basemap), story.js (full-screen story), scene.js (arc scenes),
                       visuals.js (SVG globe/dials/clock/calendar/etc.), card.js (share card PNG),
                       motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css

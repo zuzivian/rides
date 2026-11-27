@@ -34,16 +34,16 @@ export function cardSection(s) {
       <div class="share-copy">
         <div class="eyebrow">Share card</div>
         <h2 id="h-share">Your year in rides, as one image</h2>
-        <p class="sub">A 1080 × 1920 PNG for stories and chats. It’s drawn on this device. Place names and addresses are left out unless you turn them on.</p>
+        <p class="sub">A 1080 × 1920 PNG for stories and chats. It’s drawn on this device. Place names and addresses are left out unless you turn them on. Names include your nicknames and names guessed from the map.</p>
         <div class="share-controls">
           <div class="seg" role="group" aria-label="Card period">
             ${years.length > 1 ? `<button type="button" data-card-period="all" aria-pressed="${def === 'all'}">All</button>` : ''}
             ${years.map((y) => `<button type="button" data-card-period="${y}" aria-pressed="${def === String(y)}">${y}</button>`).join('')}
           </div>
-          <label class="toggle"><input type="checkbox" data-card-names ${memo.names ? 'checked' : ''}><span>Show place nicknames</span></label>
+          <label class="toggle"><input type="checkbox" data-card-names ${memo.names ? 'checked' : ''}><span>Show place names</span></label>
           <button type="button" class="btn btn-primary" data-card-download>Download PNG</button>
         </div>
-        <p class="foot">With nicknames off, the mini map shows arcs only: no streets, names or addresses. Even so, a cluster of arcs can hint at where you live, so check before posting.</p>
+        <p class="foot">With place names off, the mini map shows arcs only: no streets, names or addresses. Even so, a cluster of arcs can hint at where you live, so check before posting.</p>
       </div>
       <div class="share-preview"><canvas width="${CARD_W}" height="${CARD_H}" aria-label="Preview of your share card" role="img"></canvas></div>
     </div>
@@ -52,13 +52,13 @@ export function cardSection(s) {
 
 /**
  * Wire up the share card section.
- * @param {HTMLElement} root @param {Trip[]} trips @param {{names: Record<string,string>, unit: 'mi'|'km'}} opts
+ * @param {HTMLElement} root @param {Trip[]} trips @param {{names: Record<string,string>, guesses?: Record<string,string>, unit: 'mi'|'km'}} opts
  */
 export function mountCard(root, trips, opts) {
   const canvas = /** @type {HTMLCanvasElement} */ (root.querySelector('canvas'));
   const draw = () => {
     const subset = memo.period === 'all' ? trips : trips.filter((t) => periodOf(t) === memo.period);
-    const s = computeStats(subset.length ? subset : trips, { names: opts.names, unit: opts.unit });
+    const s = computeStats(subset.length ? subset : trips, { names: opts.names, guesses: opts.guesses, unit: opts.unit });
     if (s) drawCard(/** @type {CanvasRenderingContext2D} */ (canvas.getContext('2d')), s, { period: memo.period, showNames: memo.names, unit: opts.unit });
     canvas.setAttribute('aria-label', `Share card preview: ${s?.count ?? 0} rides${memo.period === 'all' ? '' : ` in ${memo.period}`}`);
   };

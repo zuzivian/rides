@@ -8,6 +8,7 @@ import * as fmt from '../core/format.js';
 import { reducedMotion } from './motion.js';
 import { esc } from './esc.js';
 import { startBasemap, ATTRIBUTION } from './basemap.js';
+import { pickPlaceName, toMapFeatures } from '../core/placeguess.js';
 
 /** @typedef {import('../core/stats.js').Stats} Stats */
 /** @typedef {import('../core/stats.js').TripView} TripView */
@@ -61,10 +62,15 @@ export function mapSection(s, overlay = '') {
 }
 
 export class RideMap {
-  /** @param {HTMLElement} root the .map-card section @param {Stats} stats */
-  constructor(root, stats) {
+  /**
+   * @param {HTMLElement} root the .map-card section @param {Stats} stats
+   * @param {{guesses?: Record<string, {name: string, z: number}>, onGuesses?: (ids: string[]) => void}} [opts]
+   */
+  constructor(root, stats, opts = {}) {
     this.root = root;
     this.s = stats;
+    this.guesses = opts.guesses || {};
+    this.onGuesses = opts.onGuesses;
     this.canvas = /** @type {HTMLCanvasElement} */ (root.querySelector('canvas'));
     this.ctx = /** @type {CanvasRenderingContext2D} */ (this.canvas.getContext('2d'));
     this.stage = /** @type {HTMLElement} */ (root.querySelector('.map-stage'));
@@ -111,9 +117,43 @@ export class RideMap {
       this.stage.classList.add('has-basemap');
       /** @type {HTMLElement} */ (root.querySelector('.attrib')).hidden = false;
       const net = root.querySelector('.map-net');
-      if (net) net.textContent = 'The street map comes from OpenFreeMap. Its server sees which map area you view, never your rides.';
+      if (net) net.textContent = 'The street map comes from OpenFreeMap. Its server sees which map area you view, never your rides. Places without an address are named from map labels near them, read from tiles already on screen.';
+      b.onIdle(() => this.guessNames());
+      setTimeout(() => this.guessNames(), 300); // tiles for the first view are already loaded
       this.draw();
     });
+  }
+
+  /**
+   * Name unnamed places from map labels in tiles MapLibre has already loaded
+   * for the view. Sends nothing: the tiles are already on this device.
+   */
+  guessNames() {
+    if (!this.basemap || this.destroyed) return;
+    const { poi, place, z } = this.basemap.loadedFeatures();
+    if (z < 11 || (!poi.length && !place.length)) return;
+    const feats = [...toMapFeatures(poi, 'poi'), ...toMapFeatures(place, 'place')];
+    /** @type {string[]} */
+    const changed = [];
+    for (const p of this.s.places) {
+      if (p.nameSource !== 'pattern' && p.nameSource !== 'area' && p.nameSource !== 'guess') continue;
+      const prev = this.guesses[p.id];
+      if (prev && prev.z >= z) continue;
+      const near = feats.filter((f) => Math.abs(f.lat - p.lat) < 0.04 && Math.abs(f.lng - p.lng) < 0.05);
+      const g = pickPlaceName(p.lat, p.lng, near);
+      if (!g) continue;
+      this.guesses[p.id] = { name: g.name, z };
+      if (!prev || prev.name !== g.name) changed.push(p.id);
+    }
+    if (changed.length) this.onGuesses?.(changed);
+  }
+
+  /** New names, same rides: update labels and the panel without rebuilding the map. @param {Stats} stats */
+  updateNames(stats) {
+    this.s = stats;
+    for (const p of stats.places) { const q = this.placeById.get(p.id); if (q) Object.assign(q, { name: p.name, nameSource: p.nameSource, topPartners: p.topPartners }); }
+    this.renderPanel();
+    this.draw();
   }
 
   destroy() {

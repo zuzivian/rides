@@ -7,12 +7,17 @@
 //            cleared, attribution shown, the map fills the stage, and it follows the camera
 //   nodark   /styles/dark is a 404 → falls back to positron, shown inverted
 // Each case also checks the "Street map: …" status line under the map.
+//   guess    the sample with addresses removed, and a stub map whose loaded tiles hold one
+//            neighbourhood label → places near it are named "~Stub Heights" in Places and
+//            Routes, and the localStorage cache holds names only
+// Saves docs/screenshots/place-guess-{390,1280}.png for the guess case.
 // The stub is not MapLibre and draws nothing. It checks our wiring and the CSP, not the real map.
 // Fails on any console error except the browser's own "Failed to load resource" line for a blocked host.
 // Usage: npm run build && node scripts/check-basemap.cjs [--reduced]
 const { chromium } = require('playwright');
 const { spawn } = require('node:child_process');
-const { mkdirSync } = require('node:fs');
+const { mkdirSync, readFileSync, writeFileSync, mkdtempSync } = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const reduced = process.argv.includes('--reduced');
@@ -31,8 +36,41 @@ const stub = (mode) => `window.maplibregl = { Map: class {
   on(e, f) { (this.h[e] ||= []).push(f); return this; }
   once(e, f) { const g = (x) => { this.h[e] = this.h[e].filter((k) => k !== g); f(x); }; return this.on(e, g); }
   emit(e, x = {}) { (this.h[e] || []).slice().forEach((f) => f(x)); }
-  jumpTo(v) { window.__stub.jumps.push(v); } redraw() {} resize() {} remove() { window.__stub.removed = true; }
+  jumpTo(v) { window.__stub.jumps.push(v); clearTimeout(this.it); this.it = setTimeout(() => this.emit('idle'), 30); } redraw() {} resize() {} remove() { window.__stub.removed = true; }
+  getStyle() { return { sources: { openmaptiles: { type: 'vector' } } }; }
+  getZoom() { return 14; }
+  querySourceFeatures(id, q) { return (window.__features || {})[q.sourceLayer] || []; }
 } };`;
+
+// Sample rider with every address blanked, so places need map-label guesses.
+function noAddressCsv() {
+  const lines = readFileSync(path.join(__dirname, '..', 'data', 'sample-trips.csv'), 'utf8').trim().split('\n');
+  const quoted = /"[^"]*"/g; // addresses are the only quoted fields in the sample
+  const out = [lines[0], ...lines.slice(1).map((l) => l.replace(quoted, '""'))].join('\n');
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'rides-'));
+  const file = path.join(dir, 'no-addresses.csv');
+  writeFileSync(file, out);
+  // Label spots a little way down the list of common dropoffs (past Home and Work).
+  const h = lines[0].split(',');
+  const counts = new Map();
+  for (const l of lines.slice(1)) {
+    const c = l.replace(quoted, '').split(',');
+    const k = `${Number(c[h.indexOf('Dropoff Lat')]).toFixed(3)},${Number(c[h.indexOf('Dropoff Lng')]).toFixed(3)}`;
+    counts.set(k, (counts.get(k) || 0) + 1);
+  }
+  const top2 = new Set([...counts].sort((a, b) => b[1] - a[1]).slice(0, 2).map(([k]) => k));
+  // Ends of the busiest routes that aren't Home or Work, so Routes shows them.
+  const routes = new Map();
+  for (const l of lines.slice(1)) {
+    const c = l.replace(quoted, '').split(',');
+    const f = `${Number(c[h.indexOf('Begin Trip Lat')]).toFixed(3)},${Number(c[h.indexOf('Begin Trip Lng')]).toFixed(3)}`;
+    const t = `${Number(c[h.indexOf('Dropoff Lat')]).toFixed(3)},${Number(c[h.indexOf('Dropoff Lng')]).toFixed(3)}`;
+    routes.set(`${f}>${t}`, (routes.get(`${f}>${t}`) || 0) + 1);
+  }
+  const ends = [...routes].sort((a, b) => b[1] - a[1]).slice(0, 8).flatMap(([k]) => k.split('>')).filter((k) => !top2.has(k));
+  const spots = [...new Set(ends)].slice(0, 4).map((k) => k.split(',').map(Number));
+  return { file, spots };
+}
 
 (async () => {
   const server = spawn(process.execPath, [path.join(__dirname, 'serve.mjs'), 'dist', '--port', String(port)], { cwd: path.join(__dirname, '..') });
@@ -114,6 +152,46 @@ const stub = (mode) => `window.maplibregl = { Map: class {
         console.log(`${tag}: ${expectOn ? 'basemap mode' : 'canvas fallback'} ok · ${st.status}`);
         await page.close();
       }
+    }
+    // guess: names from labels in already-loaded tiles.
+    const na = noAddressCsv();
+    for (const [w, h] of [[390, 844], [1280, 800]]) {
+      const tag = `guess@${w}`;
+      const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, reducedMotion: reduced ? 'reduce' : 'no-preference' });
+      page.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) failures.push(`[${tag}] console: ${m.text()}`); });
+      page.on('pageerror', (e) => failures.push(`[${tag}] pageerror: ${e.message}`));
+      const tileReqs = [];
+      await page.route(`${TILES}**`, (r) => { tileReqs.push(r.request().url()); return r.request().url().endsWith('/styles/dark') ? r.fulfill({ contentType: 'application/json', body: STYLE_JSON }) : r.abort(); });
+      await page.route(`${LIB}**`, (r) => (r.request().url().endsWith('.css')
+        ? r.fulfill({ contentType: 'text/css', body: '.maplibregl-map{overflow:hidden;position:relative}' })
+        : r.fulfill({ contentType: 'application/javascript', body: stub('wired') })));
+      await page.addInitScript((spots) => {
+        window.__features = { place: spots.map(([lat, lng]) => ({ geometry: { type: 'Point', coordinates: [lng, lat + 0.002] }, properties: { name: 'Stub Heights', class: 'neighbourhood' } })), poi: [] };
+      }, na.spots);
+      await page.goto(`http://localhost:${port}/?nostory`);
+      await page.setInputFiles('input[type=file]', na.file);
+      await page.waitForSelector('[data-ready]', { timeout: 10000 });
+      await page.waitForFunction(() => [...document.querySelectorAll('.places .name')].some((b) => /Stub Heights/.test(b.textContent || '')), null, { timeout: 8000 }).catch(() => {});
+      const st = await page.evaluate(() => ({
+        places: [...document.querySelectorAll('.places .name')].map((b) => b.textContent),
+        tilde: document.querySelectorAll('.places .name .guess').length,
+        routes: [...document.querySelectorAll('.routes li')].some((li) => /Stub Heights/.test(li.getAttribute('data-tip') || '')),
+        cache: localStorage.getItem('rides.guesses.v1'),
+        basemap: document.querySelector('.map-stage')?.classList.contains('has-basemap'),
+      }));
+      const check = (ok, msg) => { if (!ok) failures.push(`[${tag}] ${msg} ${JSON.stringify(st).slice(0, 400)}`); };
+      check(st.basemap, 'basemap mode should survive the name refresh');
+      check(st.places.some((t) => /^~Stub Heights/.test(t || '')), 'a place should be named ~Stub Heights');
+      check(st.tilde > 0, 'guessed names carry the ~ mark');
+      check(st.routes, 'Routes should use the guessed name');
+      const cache = JSON.parse(st.cache || '{}');
+      check(Object.keys(cache).length > 0 && Object.values(cache).every((v) => Object.keys(v).sort().join() === 'name,z'), 'cache holds only {name, z} per place');
+      check(tileReqs.every((u) => u.endsWith('/styles/dark')), `guessing must not fetch tiles itself: ${tileReqs.join(' ')}`);
+      const card = page.locator('#h-places').locator('xpath=..');
+      await card.scrollIntoViewIfNeeded();
+      await card.screenshot({ path: path.join(outDir, `place-guess-${w}.png`) });
+      console.log(`${tag}: ${st.places.filter((t) => /Stub/.test(t || '')).length} places named from map labels · saved docs/screenshots/place-guess-${w}.png`);
+      await page.close();
     }
   } finally {
     await browser.close();

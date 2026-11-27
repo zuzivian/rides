@@ -29,3 +29,13 @@
 **Style id unconfirmed.** The agent couldn't reach openfreemap.org to confirm that `styles/dark` exists. The app now fetches the style first. If `dark` doesn't return a valid style, it tries `positron`, a documented light style, and shows it inverted. The reason is reported either way.
 
 **Status line.** Under the map: "Street map: on (OpenFreeMap dark)", or "Street map: off: <reason>". The reasons are the script being blocked or timing out, a style HTTP status, a CSP directive, a tile error, a timeout, or the container having no size.
+
+## 2026-11: Guess place names from map labels, using tiles already on screen
+
+**Decision.** Places without an address are named from OpenMapTiles `poi` and `place` labels near their centre. The closest prominent POI within 120 m gives "near Whole Foods", or "Whole Foods" within 30 m. Otherwise the closest neighbourhood or suburb label within its reach gives "Mission District". The features come from `map.querySourceFeatures`, which reads only tiles MapLibre already loaded for the view. Guesses are made from z11 up, and a guess read at a higher zoom replaces one read lower down.
+
+**Privacy.** This adds no network requests, so the tile host learns nothing beyond the areas the user looks at. The cache (`rides.guesses.v1` in localStorage) holds `{name, z}` per place id. Ids are the same rounded centroids nicknames already use, so it stores no new coordinates.
+
+**Not done: fetching tiles to name every place.** Fetching the z14 tile around each place up front would name everything at once. It would also tell the tile host, along with the user's IP, which roughly 2 km tiles they ride to, Home and Work included, without their looking there. That conflicts with AGENTS.md rule 1 ("tile numbers for the area on screen"). It's waiting for Nat's decision on an explicit "Guess names for all places" button.
+
+**Priority.** Nickname, then Home/Work/airport, then street address, then map-label guess, then pattern and distance ("Late nights · 2.5 mi E of Home"). When the basemap is off, nothing changes from before.
