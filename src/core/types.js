@@ -3,7 +3,7 @@
 /**
  * @typedef {Object} Trip
  * @property {string} id
- * @property {'uber'|'lyft'|'email'|'generic'} source
+ * @property {'uber'|'lyft'|'email'|'generic'|'manual'} source
  * @property {number} start          UTC ms. Pickup time, or request time if pickup is missing.
  * @property {number|null} end       UTC ms of dropoff.
  * @property {number|null} requested UTC ms of request.
@@ -19,6 +19,8 @@
  * @property {string} currency       ISO 4217, '' if unknown.
  * @property {string} product        Normalised ride type, e.g. "UberX".
  * @property {string} city
+ * @property {boolean} [estimated]  Distance and time are estimates (rides added by hand).
+ * @property {string} [series]      Shared id for rides generated together (a usual commute).
  */
 
 /**

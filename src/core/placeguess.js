@@ -20,7 +20,7 @@ import { haversineKm } from './geo.js';
  * and area are not.
  */
 
-export const POI_EXACT_M = 40;
+export const POI_EXACT_M = 30;
 export const POI_RADIUS_M = 120;
 const HOUSE_M = 25;
 const STREET_M = 35;
@@ -42,7 +42,7 @@ function segDistM(lat, lng, a, b) {
 /**
  * The most specific real name for the point at lat/lng, in this order:
  * a POI right there ("Whole Foods Market"), a street address ("1200 9th
- * Ave"), a POI nearby ("near Whole Foods Market"), an intersection ("9th
+ * Ave"), a POI nearby (also by its name), an intersection ("9th
  * Ave & Irving St") or street, then the neighbourhood ("Inner Sunset").
  * @param {number} lat @param {number} lng
  * @param {MapFeature[]} features
@@ -80,7 +80,7 @@ export function pickPlaceName(lat, lng, features) {
   const byDist = [...streets].sort((a, b) => a[1] - b[1]);
   if (poi && poiD <= POI_EXACT_M) return { name: poi, kind: 'poi', metres: Math.round(poiD) };
   if (house && byDist.length) return { name: `${house} ${byDist[0][0]}`, kind: 'address', metres: Math.round(houseD) };
-  if (poi) return { name: `near ${poi}`, kind: 'poi', metres: Math.round(poiD) };
+  if (poi) return { name: poi, kind: 'poi', metres: Math.round(poiD) };
   if (byDist.length >= 2) return { name: `${byDist[0][0]} & ${byDist[1][0]}`, kind: 'street', metres: Math.round(byDist[1][1]) };
   if (byDist.length === 1) return { name: byDist[0][0], kind: 'street', metres: Math.round(byDist[0][1]) };
   if (area) return { name: area, kind: 'area', metres: Math.round(areaD) };

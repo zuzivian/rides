@@ -31,7 +31,8 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
   placeguess.js       name a place from nearby map features (POI, address, street, neighbourhood)
   mvt.js              minimal Mapbox Vector Tile reader (and a writer for test fixtures)
-src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), basemap.js (optional MapLibre basemap), placenames.js (names places from OpenFreeMap z14 tiles), story.js (full-screen story), scene.js (arc scenes),
+  manual.js           rides added by hand: estimates, the usual-commute generator, storage validation
+src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), basemap.js (optional MapLibre basemap), placenames.js (names places from OpenFreeMap z14 tiles), addride.js (add-a-ride sheet), story.js (full-screen story), scene.js (arc scenes),
                       visuals.js (SVG globe/dials/clock/calendar/etc.), card.js (share card PNG),
                       motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css
 data/sample-trips.csv synthetic rider, about 300 trips, May 2025 – Oct 2026
@@ -50,13 +51,14 @@ test/                 node:test suites and fixtures
 | Serve the build | `npm run preview` |
 | Regenerate sample | `npm run sample` (deterministic; CI checks it matches the committed file) |
 | Basemap check (Playwright, fallback + wiring with a stub) | `npm run build && node scripts/check-basemap.cjs` |
+| First-run check (Playwright: add a ride, commute, fallback) | `npm run build && node scripts/check-onboarding.cjs` |
 | Everything | `npm run check` |
 
 There are no npm dependencies, so there's no `npm install`.
 
 ## Checking UI changes
 
-Use Playwright (preinstalled in the cloud environment; `require('playwright')`). Serve the app, load it at **390×844** and **1280×800**, click "Try with sample data" (the story opens; add `?sample&nostory` to the URL to skip it), fail on any console error, and save screenshots to `docs/screenshots/`. Also check with `reducedMotion: 'reduce'`.
+Use Playwright (preinstalled in the cloud environment; `require('playwright')`). Serve the app, load it at **390×844** and **1280×800**, click "Try with sample data" (the story opens; add `?sample&nostory` to the URL to skip it). For the first-run flow, use `scripts/check-onboarding.cjs`, fail on any console error, and save screenshots to `docs/screenshots/`. Also check with `reducedMotion: 'reduce'`.
 
 ## Conventions
 

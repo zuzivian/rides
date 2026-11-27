@@ -108,3 +108,21 @@ export async function nameFromTiles(places, cache, opts) {
   await Promise.all(Array.from({ length: Math.min(opts.concurrency ?? 4, queue.length) }, worker));
   return { tiles: byTile.size, named, reason: '' };
 }
+
+/**
+ * Name one point (a tap on the map) from its z14 tile. Resolves '' when the
+ * tile is unavailable or has nothing nearby. Never rejects.
+ * @param {number} lat @param {number} lng
+ * @param {{fetch?: typeof fetch}} [opts]
+ */
+export async function nameAt(lat, lng, opts = {}) {
+  if (typeof location !== 'undefined' && /[?&]nobasemap\b/.test(location.search)) return '';
+  const f = opts.fetch || fetch.bind(globalThis);
+  try {
+    const template = await (templatePromise ||= tileTemplate(f).catch((e) => { templatePromise = null; throw e; }));
+    const layers = await loadTile(f, template, tileFor(lat, lng, TILE_Z));
+    if (!layers) return '';
+    const feats = TILE_LAYERS.flatMap((l) => toMapFeatures(layers[l] || [], l));
+    return pickPlaceName(lat, lng, feats)?.name || '';
+  } catch { return ''; }
+}

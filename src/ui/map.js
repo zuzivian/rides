@@ -116,6 +116,18 @@ export class RideMap {
     });
   }
 
+  /** Fly to a few trips (just added) so their arcs are in view. @param {import('../core/types.js').Trip[]} trips */
+  focusTrips(trips) {
+    /** @type {[number, number][]} */
+    const pts = [];
+    for (const t of trips) {
+      if (t.fromLat != null && t.fromLng != null) pts.push(/** @type {[number, number]} */ (project(t.fromLng, t.fromLat)));
+      if (t.toLat != null && t.toLng != null) pts.push(/** @type {[number, number]} */ (project(t.toLng, t.toLat)));
+    }
+    const b = robustBounds(pts, 0);
+    if (b) this.flyTo(this.camFor(b), true);
+  }
+
   /** New names, same rides: update labels and the panel without rebuilding the map. @param {Stats} stats */
   updateNames(stats) {
     this.s = stats;
@@ -158,7 +170,15 @@ export class RideMap {
   camFor(b) {
     const hero = this.root.classList.contains('map-hero');
     const side = Math.min(56, this.w * 0.1);
-    const top = hero ? Math.min(210, this.h * 0.3) : side; const bottom = hero ? 96 : side;
+    let top = hero ? Math.min(210, this.h * 0.3) : side; let bottom = hero ? 96 : side;
+    if (hero) {
+      // Keep the data clear of the overlay's header and chips, as laid out now.
+      const sr = this.stage.getBoundingClientRect();
+      const head = this.root.querySelector('.ov-head')?.getBoundingClientRect();
+      const chips = this.root.querySelector('.ov-chips')?.getBoundingClientRect();
+      if (head && head.height) top = Math.min(this.h * 0.45, Math.max(top, head.bottom - sr.top + 16));
+      if (chips && chips.height) bottom = Math.min(this.h * 0.4, Math.max(bottom, sr.bottom - chips.top + 16));
+    }
     const bw = Math.max(b.maxX - b.minX, 2e-6); const bh = Math.max(b.maxY - b.minY, 2e-6);
     const z = Math.min((this.w - side * 2) / bw, (this.h - top - bottom) / bh, MAX_Z / 4);
     // Shift the centre so the data sits in the clear area between the overlays.

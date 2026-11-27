@@ -3,6 +3,7 @@
 const KEY = 'rides.v1';
 
 const GUESS_KEY = 'rides.guesses.v1';
+const MANUAL_KEY = 'rides.manual.v1';
 
 /** @returns {{names: Record<string,string>, unit?: 'mi'|'km'}} */
 export function load() {
@@ -46,4 +47,17 @@ export function saveGuesses(g) {
 
 export function clearGuesses() {
   try { localStorage.removeItem(GUESS_KEY); } catch { /* ignore */ }
+}
+
+/** Rides added by hand (source: manual). Raw JSON; core/manual.js readManual() validates it. */
+export function loadManualRaw() {
+  try { return JSON.parse(localStorage.getItem(MANUAL_KEY) || '[]'); } catch { return []; }
+}
+
+/** @param {import('../core/types.js').Trip[]} trips */
+export function saveManual(trips) {
+  try {
+    if (trips.length) localStorage.setItem(MANUAL_KEY, JSON.stringify(trips));
+    else localStorage.removeItem(MANUAL_KEY);
+  } catch { /* keep in memory only */ }
 }

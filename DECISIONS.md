@@ -33,9 +33,9 @@
 ## 26 Nov 2026: Name every place from its OpenFreeMap tile, automatically
 
 **Decision (Nat, 26 Nov 2026, relayed by Sinny, verbatim):** "just show the exact places. the user has exported the data, so trust them to know what youre doing". After places are computed, the app fetches the z14 tile containing each place that has no nickname and isn't Home, Work or an airport. It decodes the tile on the device (`src/core/mvt.js`, a small pure MVT reader) and names the place with `pickPlaceName` (`src/core/placeguess.js`):
-1. a POI within 40 m ("Whole Foods Market");
+1. a POI within 30 m ("Whole Foods Market");
 2. a house number within 25 m on the nearest street ("1200 9th Avenue");
-3. a POI within 120 m ("near Whole Foods Market");
+3. a POI within 120 m, also by its plain name (Sinny, 27 Nov: no "near");
 4. an intersection or street ("9th Avenue & Irving Street");
 5. the neighbourhood ("Inner Sunset").
 
