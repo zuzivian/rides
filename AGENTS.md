@@ -8,9 +8,9 @@ Rides is a client-only web app that parses a person's own Uber or Lyft export an
 
 ## Hard rules
 
-1. **No network calls with user data.** No server, no analytics, no remote scripts or fonts. The CSP in `index.html` enforces this. The only third-party request ever allowed is basemap tiles, and the current map uses none.
+1. **No network calls with user data.** No server, no analytics, no remote fonts. The CSP in `index.html` enforces this. The only third-party requests allowed are for the optional basemap: the MapLibre script and stylesheet (see rule 3) and the style, tiles, glyphs and sprites from `tiles.openfreemap.org`. Tile URLs carry tile numbers for the area on screen, never ride data.
 2. **Never commit real ride data.** Use `data/sample-trips.csv` (synthetic, generated) or files under `private/` (git-ignored).
-3. **No runtime dependencies from CDNs.** If a library is needed, vendor a pinned copy into `public/vendor/` with its licence.
+3. **No runtime dependencies from CDNs, with one exception.** If a library is needed, vendor a pinned copy into `public/vendor/` with its licence. The exception is MapLibre GL, loaded lazily from `https://unpkg.com/maplibre-gl@4.7.1/` (exact version, see `DECISIONS.md`). The map must keep working without it. `npm run build` fails on any other remote script, stylesheet or CSP host.
 4. **`src/core/` stays pure.** It has no DOM, no `fetch`, no `localStorage` and no Node APIs, so it runs in the browser, in `node --test`, and can be ported to Swift one file at a time.
 
 ## Layout
@@ -29,7 +29,7 @@ src/core/             pure logic: parsing and stats (port this to Swift)
   email.js            .eml/.mbox → MIME → receipt text → Trip[] (Uber/Lyft heuristics)
   story.js            rider type (rule-based personality) and real-world distance comparisons
   mercator.js         Web Mercator, arc control points, Bézier split, robust bounds
-src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), story.js (full-screen story), scene.js (arc scenes),
+src/ui/               DOM: main.js (controller), views.js (HTML), map.js (canvas map + replay), basemap.js (optional MapLibre basemap), story.js (full-screen story), scene.js (arc scenes),
                       visuals.js (SVG globe/dials/clock/calendar/etc.), card.js (share card PNG),
                       motion.js (count-ups, reveals, tooltip), store.js (localStorage), styles.css
 data/sample-trips.csv synthetic rider, about 300 trips, May 2025 – Oct 2026
@@ -47,6 +47,7 @@ test/                 node:test suites and fixtures
 | Build | `npm run build` (writes `dist/`, fails on broken references or remote scripts) |
 | Serve the build | `npm run preview` |
 | Regenerate sample | `npm run sample` (deterministic; CI checks it matches the committed file) |
+| Basemap check (Playwright, fallback + wiring with a stub) | `npm run build && node scripts/check-basemap.cjs` |
 | Everything | `npm run check` |
 
 There are no npm dependencies, so there's no `npm install`.

@@ -537,7 +537,7 @@ export class RideMap {
     const target = (90 * mpp) / unitM;
     const nice = [0.1, 0.2, 0.25, 0.5, 1, 2, 5, 10, 20, 50, 100, 200, 500, 1000, 2000].reduce((best, v) => (Math.abs(v - target) < Math.abs(best - target) ? v : best));
     const px = (nice * unitM) / mpp;
-    const x = this.w - px - 60; const y = h - 16;
+    const x = this.w - px - 60; const y = h - 16 - (this.basemap ? 34 : 0); // clear the attribution
     ctx.strokeStyle = 'rgba(236, 231, 223, .5)'; ctx.lineWidth = 1.5;
     ctx.beginPath(); ctx.moveTo(x, y - 5); ctx.lineTo(x, y); ctx.lineTo(x + px, y); ctx.lineTo(x + px, y - 5); ctx.stroke();
     ctx.fillStyle = 'rgba(236, 231, 223, .65)'; ctx.font = '10px ui-monospace, SF Mono, Menlo, monospace'; ctx.textBaseline = 'bottom';
