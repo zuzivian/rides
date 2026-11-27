@@ -268,11 +268,24 @@ export function mergeTrips(lists) {
   /** @type {Trip[]} */
   const out = [];
   for (const t of all) {
-    const dup = out.slice(-8).some((o) => Math.abs(o.start - t.start) < 180000 && (
+    const dup = out.slice(-8).find((o) => Math.abs(o.start - t.start) < 180000 && (
       (o.fare != null && t.fare != null && Math.abs(o.fare - t.fare) < 0.01) ||
       (o.fromLat != null && t.fromLat != null && Math.abs(o.fromLat - t.fromLat) < 0.002 && Math.abs(/** @type {number} */ (o.fromLng) - /** @type {number} */ (t.fromLng)) < 0.002)
     ));
-    if (!dup) out.push(t);
+    if (dup) fillGaps(dup, t); else out.push({ ...t });
   }
   return out;
+}
+
+/**
+ * The same ride from two sources (say an export with coordinates but blank
+ * addresses, and a receipt with addresses): keep the first, fill its blanks.
+ * @param {Trip} keep @param {Trip} other
+ */
+function fillGaps(keep, other) {
+  const k = /** @type {Record<string, any>} */ (keep); const o = /** @type {Record<string, any>} */ (other);
+  for (const f of ['fromAddress', 'toAddress', 'product', 'city', 'currency']) if (!k[f] && o[f]) k[f] = o[f];
+  for (const f of ['end', 'requested', 'km', 'fare']) if (k[f] == null && o[f] != null) k[f] = o[f];
+  if (k.fromLat == null && o.fromLat != null) { k.fromLat = o.fromLat; k.fromLng = o.fromLng; }
+  if (k.toLat == null && o.toLat != null) { k.toLat = o.toLat; k.toLng = o.toLng; }
 }
