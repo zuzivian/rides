@@ -30,6 +30,23 @@
 
 **Status line.** Under the map: "Street map: on (OpenFreeMap dark)", or "Street map: off: <reason>". The reasons are the script being blocked or timing out, a style HTTP status, a CSP directive, a tile error, a timeout, or the container having no size.
 
+## 26 Nov 2026: Name every place from its OpenFreeMap tile, automatically
+
+**Decision (Nat, 26 Nov 2026, relayed by Sinny, verbatim):** "just show the exact places. the user has exported the data, so trust them to know what youre doing". After places are computed, the app fetches the z14 tile containing each place that has no nickname and isn't Home, Work or an airport. It decodes the tile on the device (`src/core/mvt.js`, a small pure MVT reader) and names the place with `pickPlaceName` (`src/core/placeguess.js`):
+1. a POI within 40 m ("Whole Foods Market");
+2. a house number within 25 m on the nearest street ("1200 9th Avenue");
+3. a POI within 120 m ("near Whole Foods Market");
+4. an intersection or street ("9th Avenue & Irving Street");
+5. the neighbourhood ("Inner Sunset").
+
+A POI or address beats the export's street name; a street or neighbourhood doesn't. Nicknames win, as always. Names are shown plainly, with no "~". The distance fallback ("0.5 mi NW of Home") is used only when a tile has no usable name.
+
+**Privacy.** Requests go only to tiles.openfreemap.org and carry only `z/x/y` (checked in unit tests and in the Playwright `names` case). The tile host learns which roughly 2 km tiles are involved, with the user's IP, which can include the tiles around Home and Work. The README says this, and the app shows: "Place names come from OpenFreeMap map tiles for the areas you ride in; your rides never leave your device." AGENTS.md rule 1 is amended to allow it.
+
+**Caching.** Decoded tiles are cached in memory for the page, one request per tile. Names are cached in localStorage (`rides.guesses.v1`: `{name, kind, z}` per place id, with no coordinates), so repeat visits make no tile requests. "Looked, nothing here" is stored as an empty name, and a failed request is retried on a later visit.
+
+**Superseded:** the on-screen-only approach below, which read labels via `querySourceFeatures`. It was removed because the tile fetch covers every place.
+
 ## 2026-11: Guess place names from map labels, using tiles already on screen
 
 **Decision.** Places without an address are named from OpenMapTiles `poi` and `place` labels near their centre. The closest prominent POI within 120 m gives "near Whole Foods", or "Whole Foods" within 30 m. Otherwise the closest neighbourhood or suburb label within its reach gives "Mission District". The features come from `map.querySourceFeatures`, which reads only tiles MapLibre already loaded for the view. Guesses are made from z11 up, and a guess read at a higher zoom replaces one read lower down.

@@ -189,14 +189,15 @@ export function dashboard(s, ctx) {
         ${s.places.length ? `<ul class="places">${s.places.slice(0, ctx.allPlaces ? 60 : 6).map((pl) => `
           <li>
             <span class="kind" aria-hidden="true">${KIND_BADGE[pl.kind]}</span>
-            <button class="name" type="button" data-rename="${esc(pl.id)}" aria-label="Rename ${esc(pl.name)}"${pl.nameSource === 'pattern' || pl.nameSource === 'area' || pl.nameSource === 'guess' ? ' title="A guess. Tap to name it."' : ''}>${pl.nameSource === 'guess' ? '<span class="guess" aria-label="guessed">~</span>' : ''}${esc(pl.name)}</button>
+            <button class="name" type="button" data-rename="${esc(pl.id)}" aria-label="Rename ${esc(pl.name)}"${pl.nameSource === 'pattern' || pl.nameSource === 'area' ? ' title="A guess. Tap to name it."' : ''}>${esc(pl.name)}</button>
             <span class="n">${pl.visits}</span>
           </li>`).join('')}</ul>
           <div class="more">
             ${s.places.length > 6 ? `<button class="btn btn-small" data-action="all-places">${ctx.allPlaces ? 'Show fewer' : `Show all ${s.places.length}`}</button>` : ''}
             <button class="btn btn-small btn-ghost" data-action="reset-names">Reset names</button>
           </div>` : '<p class="foot">Receipt-only rides have no coordinates, so there are no places to name.</p>'}
-        ${s.places.some((pl) => pl.nameSource === 'pattern' || pl.nameSource === 'area' || pl.nameSource === 'guess') ? '<p class="foot">Places without an address are named from map labels near them (marked ~), once the street map has shown that area. Otherwise they\'re named from when you ride there ("Work?", "Late nights") and how far they are from Home. These are guesses: tap ✎ to name them.</p>' : ''}
+        <p class="foot">Place names come from OpenFreeMap map tiles for the areas you ride in; your rides never leave your device.</p>
+        ${s.places.some((pl) => pl.nameSource === 'pattern' || pl.nameSource === 'area') ? '<p class="foot">Where the map has no name nearby, places are named from when you ride there ("Work?", "Late nights") and how far they are from Home. Tap ✎ to name them.</p>' : ''}
         <p class="foot">Nicknames stay on this device.</p>
       </section>
 

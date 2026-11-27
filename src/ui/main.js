@@ -8,6 +8,7 @@ import { animateIn, installTooltip } from './motion.js';
 import { RideMap, mapSection } from './map.js';
 import { cardSection, mountCard, saveCard } from './card.js';
 import { openStory } from './story.js';
+import { nameFromTiles } from './placenames.js';
 
 /** @typedef {import('../core/types.js').Trip} Trip */
 
@@ -20,7 +21,7 @@ const state = {
   /** @type {string[]} */ warnings: [],
   /** @type {'mi'|'km'} */ unit: prefs.unit || 'mi',
   names: prefs.names,
-  /** Names guessed from map labels: per device, names only. */
+  /** Place names from OpenFreeMap tiles: per device, names only. */
   guesses: store.loadGuesses(),
   allPlaces: false,
   /** @type {ReturnType<typeof computeStats>} */ stats: null,
@@ -40,7 +41,7 @@ function showLanding(error = '') {
   animateIn(app, { animate: true });
 }
 
-const guessNames = () => Object.fromEntries(Object.entries(state.guesses).map(([id, g]) => [id, g.name]));
+const guessNames = () => Object.fromEntries(Object.entries(state.guesses).map(([id, g]) => [id, { name: g.name, kind: g.kind }]));
 
 /**
  * @param {{animate: boolean, keepScroll?: boolean, keepMap?: boolean}} o
@@ -58,7 +59,7 @@ function showDashboard(o) {
   if (slot && keep && map) { slot.replaceWith(keep); map.updateNames(state.stats); }
   else if (slot && state.stats.places.length) {
     slot.outerHTML = mapSection(state.stats, views.mapOverlay(state.stats, { source: state.source, unit: state.unit }));
-    map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats, { guesses: state.guesses, onGuesses });
+    map = new RideMap(/** @type {HTMLElement} */ (app.querySelector('.map-card')), state.stats);
   } else slot?.remove();
   const before = app.querySelector('.note-honest');
   if (before) {
@@ -68,11 +69,12 @@ function showDashboard(o) {
   app.setAttribute('data-ready', '');
   if (o.keepScroll) window.scrollTo(0, y); else window.scrollTo(0, 0);
   animateIn(app, { animate: o.animate && !keep });
+  if (!keep) nameFromTiles(state.stats.places, state.guesses, { onNames: onGuesses });
   document.dispatchEvent(new CustomEvent('rides:render', { detail: state }));
 }
 
-// New map-label guesses: save them, then refresh names on the page. Batched,
-// and held while the user is typing a nickname.
+// New names from map tiles: save them, then refresh names on the page.
+// Batched, and held while the user is typing a nickname.
 let guessTimer = 0;
 function onGuesses() {
   store.saveGuesses(state.guesses);

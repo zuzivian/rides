@@ -7,10 +7,11 @@
 //            cleared, attribution shown, the map fills the stage, and it follows the camera
 //   nodark   /styles/dark is a 404 → falls back to positron, shown inverted
 // Each case also checks the "Street map: …" status line under the map.
-//   guess    the sample with addresses removed, and a stub map whose loaded tiles hold one
-//            neighbourhood label → places near it are named "~Stub Heights" in Places and
-//            Routes, and the localStorage cache holds names only
-// Saves docs/screenshots/place-guess-{390,1280}.png for the guess case.
+//   names    the sample with addresses removed; OpenFreeMap tile requests are answered with
+//            fixture MVT tiles holding a POI at a few places → those places are named
+//            "Stub Market N" in Places and Routes, tile URLs carry only z/x/y, each tile is
+//            fetched once, and the localStorage cache holds names only
+// Saves docs/screenshots/place-names-{390,1280}.png for the names case.
 // The stub is not MapLibre and draws nothing. It checks our wiring and the CSP, not the real map.
 // Fails on any console error except the browser's own "Failed to load resource" line for a blocked host.
 // Usage: npm run build && node scripts/check-basemap.cjs [--reduced]
@@ -42,7 +43,7 @@ const stub = (mode) => `window.maplibregl = { Map: class {
   querySourceFeatures(id, q) { return (window.__features || {})[q.sourceLayer] || []; }
 } };`;
 
-// Sample rider with every address blanked, so places need map-label guesses.
+// Sample rider with every address blanked, so places need names from the map.
 function noAddressCsv() {
   const lines = readFileSync(path.join(__dirname, '..', 'data', 'sample-trips.csv'), 'utf8').trim().split('\n');
   const quoted = /"[^"]*"/g; // addresses are the only quoted fields in the sample
@@ -153,44 +154,56 @@ function noAddressCsv() {
         await page.close();
       }
     }
-    // guess: names from labels in already-loaded tiles.
+    // names: places named from OpenFreeMap tiles (fixture MVT tiles built with our own writer).
+    const { writeTile } = await import(require('node:url').pathToFileURL(path.join(__dirname, '..', 'src', 'core', 'mvt.js')).href);
     const na = noAddressCsv();
+    const STYLE_VEC = JSON.stringify({ version: 8, name: 'stub', sources: { openmaptiles: { type: 'vector', url: `${TILES}planet` } }, layers: [] });
+    const TILEJSON = JSON.stringify({ tiles: [`${TILES}planet/test/{z}/{x}/{y}.pbf`] });
+    const poiTile = (z, x, y) => Buffer.from(writeTile({
+      poi: na.spots.map(([lat, lng], i) => ({ type: 1, properties: { name: `Stub Market ${i + 1}`, class: 'grocery', rank: 5 }, geometry: [[[lng, lat]]] })),
+    }, { z, x, y }));
     for (const [w, h] of [[390, 844], [1280, 800]]) {
-      const tag = `guess@${w}`;
+      const tag = `names@${w}`;
       const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 1, reducedMotion: reduced ? 'reduce' : 'no-preference' });
       page.on('console', (m) => { if (m.type() === 'error' && !/^Failed to load resource/.test(m.text())) failures.push(`[${tag}] console: ${m.text()}`); });
       page.on('pageerror', (e) => failures.push(`[${tag}] pageerror: ${e.message}`));
       const tileReqs = [];
-      await page.route(`${TILES}**`, (r) => { tileReqs.push(r.request().url()); return r.request().url().endsWith('/styles/dark') ? r.fulfill({ contentType: 'application/json', body: STYLE_JSON }) : r.abort(); });
+      await page.route(`${TILES}**`, (r) => {
+        const url = r.request().url(); tileReqs.push(url);
+        if (url.endsWith('/styles/dark')) return r.fulfill({ contentType: 'application/json', body: STYLE_VEC });
+        if (url === `${TILES}planet`) return r.fulfill({ contentType: 'application/json', body: TILEJSON });
+        const m = url.match(/\/planet\/test\/(\d+)\/(\d+)\/(\d+)\.pbf$/);
+        if (m) return r.fulfill({ contentType: 'application/x-protobuf', body: poiTile(+m[1], +m[2], +m[3]) });
+        return r.abort();
+      });
       await page.route(`${LIB}**`, (r) => (r.request().url().endsWith('.css')
         ? r.fulfill({ contentType: 'text/css', body: '.maplibregl-map{overflow:hidden;position:relative}' })
         : r.fulfill({ contentType: 'application/javascript', body: stub('wired') })));
-      await page.addInitScript((spots) => {
-        window.__features = { place: spots.map(([lat, lng]) => ({ geometry: { type: 'Point', coordinates: [lng, lat + 0.002] }, properties: { name: 'Stub Heights', class: 'neighbourhood' } })), poi: [] };
-      }, na.spots);
       await page.goto(`http://localhost:${port}/?nostory`);
       await page.setInputFiles('input[type=file]', na.file);
       await page.waitForSelector('[data-ready]', { timeout: 10000 });
-      await page.waitForFunction(() => [...document.querySelectorAll('.places .name')].some((b) => /Stub Heights/.test(b.textContent || '')), null, { timeout: 8000 }).catch(() => {});
+      await page.waitForFunction(() => [...document.querySelectorAll('.places .name')].some((b) => /Stub Market/.test(b.textContent || '')), null, { timeout: 8000 }).catch(() => {});
       const st = await page.evaluate(() => ({
         places: [...document.querySelectorAll('.places .name')].map((b) => b.textContent),
-        tilde: document.querySelectorAll('.places .name .guess').length,
-        routes: [...document.querySelectorAll('.routes li')].some((li) => /Stub Heights/.test(li.getAttribute('data-tip') || '')),
+        routes: [...document.querySelectorAll('.routes li')].some((li) => /Stub Market/.test(li.getAttribute('data-tip') || '')),
         cache: localStorage.getItem('rides.guesses.v1'),
         basemap: document.querySelector('.map-stage')?.classList.contains('has-basemap'),
+        note: [...document.querySelectorAll('.foot')].some((p) => /Place names come from OpenFreeMap map tiles for the areas you ride in; your rides never leave your device\./.test(p.textContent || '')),
       }));
       const check = (ok, msg) => { if (!ok) failures.push(`[${tag}] ${msg} ${JSON.stringify(st).slice(0, 400)}`); };
       check(st.basemap, 'basemap mode should survive the name refresh');
-      check(st.places.some((t) => /^~Stub Heights/.test(t || '')), 'a place should be named ~Stub Heights');
-      check(st.tilde > 0, 'guessed names carry the ~ mark');
-      check(st.routes, 'Routes should use the guessed name');
+      check(st.places.some((t) => /^Stub Market \d/.test(t || '')), 'a place should be named plainly from the tile POI (no ~)');
+      check(st.routes, 'Routes should use the tile name');
+      check(st.note, 'privacy line about place names');
       const cache = JSON.parse(st.cache || '{}');
-      check(Object.keys(cache).length > 0 && Object.values(cache).every((v) => Object.keys(v).sort().join() === 'name,z'), 'cache holds only {name, z} per place');
-      check(tileReqs.every((u) => u.endsWith('/styles/dark')), `guessing must not fetch tiles itself: ${tileReqs.join(' ')}`);
+      check(Object.keys(cache).length > 0 && Object.values(cache).every((v) => Object.keys(v).sort().join() === 'kind,name,z'), 'cache holds only {name, kind, z} per place');
+      const tileUrls = tileReqs.filter((u) => /\.pbf$/.test(u));
+      check(tileUrls.length > 0 && tileUrls.every((u) => /^https:\/\/tiles\.openfreemap\.org\/planet\/test\/14\/\d+\/\d+\.pbf$/.test(u)), `tile requests are z/x/y only: ${tileUrls.slice(0, 3).join(' ')}`);
+      check(new Set(tileUrls).size === tileUrls.length, 'each tile is fetched once');
       const card = page.locator('#h-places').locator('xpath=..');
       await card.scrollIntoViewIfNeeded();
-      await card.screenshot({ path: path.join(outDir, `place-guess-${w}.png`) });
-      console.log(`${tag}: ${st.places.filter((t) => /Stub/.test(t || '')).length} places named from map labels · saved docs/screenshots/place-guess-${w}.png`);
+      await card.screenshot({ path: path.join(outDir, `place-names-${w}.png`) });
+      console.log(`${tag}: ${st.places.filter((t) => /Stub/.test(t || '')).length} places named from ${tileUrls.length} tiles · saved docs/screenshots/place-names-${w}.png`);
       await page.close();
     }
   } finally {

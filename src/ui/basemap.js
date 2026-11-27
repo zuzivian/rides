@@ -196,28 +196,6 @@ export class Basemap {
 
   resize() { try { this.map.resize(); this.key = ''; } catch { /* ignore */ } }
 
-  /** Call `fn` (debounced) each time the map finishes loading tiles. @param {() => void} fn */
-  onIdle(fn) {
-    let t = 0;
-    try { this.map.on('idle', () => { clearTimeout(t); t = /** @type {any} */ (setTimeout(fn, 300)); }); } catch { /* ignore */ }
-  }
-
-  /**
-   * Point features from tiles MapLibre has already loaded (no new requests).
-   * @returns {{poi: any[], place: any[], z: number}}
-   */
-  loadedFeatures() {
-    try {
-      const sources = this.map.getStyle()?.sources || {};
-      const id = Object.keys(sources).find((k) => sources[k].type === 'vector');
-      if (!id) return { poi: [], place: [], z: 0 };
-      return {
-        poi: this.map.querySourceFeatures(id, { sourceLayer: 'poi' }) || [],
-        place: this.map.querySourceFeatures(id, { sourceLayer: 'place' }) || [],
-        z: Math.floor(this.map.getZoom()),
-      };
-    } catch { return { poi: [], place: [], z: 0 }; }
-  }
 
   remove() { try { this.map.remove(); } catch { /* ignore */ } this.host.remove(); }
 }

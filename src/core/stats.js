@@ -24,7 +24,7 @@ const EARTH_KM = 40075;
 
 /**
  * @param {Trip[]} trips
- * @param {{names?: Record<string,string>, guesses?: Record<string,string>, unit?: 'mi'|'km'}} [opts]
+ * @param {{names?: Record<string,string>, guesses?: Record<string, string|{name: string, kind?: string}>, unit?: 'mi'|'km'}} [opts]
  */
 export function computeStats(trips, opts = {}) {
   const unit = opts.unit || 'mi';

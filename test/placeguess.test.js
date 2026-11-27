@@ -74,7 +74,7 @@ test('guesses name address-less places; addresses, Home/Work and nicknames still
   const guesses = { [plain.id]: 'near Whole Foods', [home.id]: 'Should not win' };
   const g = clusterPlaces(bare, { guesses }).places;
   assert.equal(g.find((p) => p.id === plain.id)?.name, 'near Whole Foods');
-  assert.equal(g.find((p) => p.id === plain.id)?.nameSource, 'guess');
+  assert.equal(g.find((p) => p.id === plain.id)?.nameSource, 'map');
   assert.equal(g.find((p) => p.id === home.id)?.name, 'Home');
   const nick = clusterPlaces(bare, { guesses, names: { [plain.id]: 'Groceries' } }).places.find((p) => p.id === plain.id);
   assert.equal(nick?.name, 'Groceries');
@@ -94,4 +94,96 @@ test('basemap off (no guesses): distance/direction fallback, and guessed names f
   assert.ok(target);
   const on = computeStats(bare, { unit: 'mi', guesses: { [/** @type {string} */ (target)]: 'Mission District' } });
   assert.ok(on?.routes.some((r) => r.toName === 'Mission District' || r.fromName === 'Mission District'));
+});
+
+// --- tiles: MVT reader, richer names, and the tile namer ---------------------
+import { readTile, writeTile, tileFor, decodeGeometry } from '../src/core/mvt.js';
+import { TILE_LAYERS } from '../src/core/placeguess.js';
+import { nameFromTiles, TILE_Z } from '../src/ui/placenames.js';
+
+const T = tileFor(P.lat, P.lng, 14);
+/** A fixture tile around P: a POI, a house number on 9th Ave, two streets and a neighbourhood. */
+function fixtureTile({ poiAt = 60 } = {}) {
+  const pt = (dLat, dLng) => { const a = at(dLat, dLng); return [[[a.lng, a.lat]]]; };
+  const line = (from, to) => { const a = at(...from); const b = at(...to); return [[[a.lng, a.lat], [b.lng, b.lat]]]; };
+  return writeTile({
+    poi: [{ type: 1, properties: { name: 'Whole Foods Market', class: 'grocery', rank: 5 }, geometry: pt(poiAt, 0) }],
+    housenumber: [{ type: 1, properties: { housenumber: '1200' }, geometry: pt(5, 8) }],
+    transportation_name: [
+      { type: 2, properties: { name: '9th Avenue', class: 'secondary' }, geometry: line([-300, 10], [300, 10]) },
+      { type: 2, properties: { name: 'Irving Street', class: 'secondary' }, geometry: line([20, -300], [20, 300]) },
+    ],
+    place: [{ type: 1, properties: { name: 'Inner Sunset', class: 'neighbourhood' }, geometry: pt(400, 300) }],
+  }, T);
+}
+
+test('mvt: writeTile → readTile round-trips names, classes and lng/lat within a few metres', () => {
+  const layers = readTile(fixtureTile(), T, TILE_LAYERS);
+  assert.deepEqual(Object.keys(layers).sort(), ['housenumber', 'place', 'poi', 'transportation_name']);
+  const poi = layers.poi[0];
+  assert.equal(poi.properties.name, 'Whole Foods Market');
+  assert.equal(poi.properties.rank, 5);
+  const want = at(60, 0);
+  assert.ok(Math.abs(poi.geometry[0][0][1] - want.lat) < 0.0001 && Math.abs(poi.geometry[0][0][0] - want.lng) < 0.0001);
+  assert.equal(layers.transportation_name[0].geometry[0].length, 2);
+  assert.deepEqual(decodeGeometry([9, 2, 4]), [[[1, 2]]]); // MoveTo(+1,+2) zigzag
+});
+
+test('pickPlaceName on a decoded tile: POI at the door > address > near POI > intersection > neighbourhood', () => {
+  const feats = (bytes) => { const l = readTile(bytes, T, TILE_LAYERS); return TILE_LAYERS.flatMap((k) => toMapFeatures(l[k] || [], k)); };
+  assert.equal(pickPlaceName(P.lat, P.lng, feats(fixtureTile({ poiAt: 20 })))?.name, 'Whole Foods Market');
+  assert.deepEqual(pickPlaceName(P.lat, P.lng, feats(fixtureTile({ poiAt: 60 }))), { name: '1200 9th Avenue', kind: 'address', metres: 9 });
+  const noHouse = feats(fixtureTile()).filter((f) => f.layer !== 'housenumber');
+  assert.equal(pickPlaceName(P.lat, P.lng, noHouse)?.name, 'near Whole Foods Market');
+  const streetsOnly = noHouse.filter((f) => f.layer !== 'poi');
+  assert.deepEqual(pickPlaceName(P.lat, P.lng, streetsOnly), { name: '9th Avenue & Irving Street', kind: 'street', metres: 20 });
+  assert.equal(pickPlaceName(P.lat, P.lng, streetsOnly.filter((f) => f.layer === 'place'))?.name, 'Inner Sunset');
+});
+
+test('priority: a map POI/address beats the export street; a map street or area does not', () => {
+  const csv = readFileSync(new URL('../data/sample-trips.csv', import.meta.url), 'utf8');
+  const { trips } = parseTripsCsv(csv);
+  const p = clusterPlaces(trips).places.find((x) => x.nameSource === 'address');
+  assert.ok(p);
+  const with_ = (g) => clusterPlaces(trips, { guesses: { [p.id]: g } }).places.find((x) => x.id === p.id);
+  assert.equal(with_({ name: 'Whole Foods Market', kind: 'poi' })?.name, 'Whole Foods Market');
+  assert.equal(with_({ name: '1200 9th Avenue', kind: 'address' })?.nameSource, 'map');
+  assert.equal(with_({ name: 'Inner Sunset', kind: 'area' })?.nameSource, 'address');
+  assert.equal(with_({ name: '', kind: '', z: 14 })?.nameSource, 'address');
+});
+
+test('nameFromTiles: one request per tile, z/x/y only, cached; names flow back', async () => {
+  const urls = [];
+  const fakeFetch = async (url) => {
+    urls.push(url);
+    const ok = (body, type) => ({ ok: true, status: 200, json: async () => body, arrayBuffer: async () => body });
+    if (url.endsWith('/styles/dark')) return ok({ version: 8, sources: { openmaptiles: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' } } });
+    if (url === 'https://tiles.openfreemap.org/planet') return ok({ tiles: ['https://tiles.openfreemap.org/planet/v1/{z}/{x}/{y}.pbf'] });
+    if (url === `https://tiles.openfreemap.org/planet/v1/14/${T.x}/${T.y}.pbf`) { const b = fixtureTile(); return ok(b.buffer.slice(b.byteOffset, b.byteOffset + b.byteLength)); }
+    return { ok: false, status: 404, json: async () => null, arrayBuffer: async () => new ArrayBuffer(0) };
+  };
+  const a = at(0, 0); const b = at(2, 3); const far = { lat: 51.5, lng: -0.12 };
+  const places = [
+    { id: 'c:a', lat: a.lat, lng: a.lng, nameSource: 'area' },
+    { id: 'c:b', lat: b.lat, lng: b.lng, nameSource: 'address' },
+    { id: 'c:far', lat: far.lat, lng: far.lng, nameSource: 'pattern' },
+    { id: 'ap:SFO', lat: 37.62, lng: -122.38, nameSource: 'kind' },
+    { id: 'c:nick', lat: a.lat, lng: a.lng, nameSource: 'nickname' },
+  ];
+  const cache = {};
+  const seen = [];
+  const r = await nameFromTiles(places, cache, { fetch: fakeFetch, onNames: (ids) => seen.push(...ids) });
+  assert.deepEqual(r, { tiles: 2, named: 2, reason: '' });
+  assert.deepEqual(seen.sort(), ['c:a', 'c:b']);
+  assert.equal(cache['c:a'].name, '1200 9th Avenue');
+  assert.equal(cache['c:far'], undefined, 'a failed tile records nothing, so a later visit can retry');
+  assert.ok(!cache['ap:SFO'] && !cache['c:nick'], 'Home/Work/airports and nicknames are left alone');
+  // Every request is to tiles.openfreemap.org and carries no coordinates.
+  for (const u of urls) {
+    assert.ok(u.startsWith('https://tiles.openfreemap.org/'), u);
+    assert.ok(!/37\.7|122\.4|51\.5/.test(u), `no coordinates in ${u}`);
+  }
+  const before = urls.length;
+  await nameFromTiles(places, cache, { fetch: fakeFetch, onNames: () => {} });
+  assert.equal(urls.length, before, 'cached names are not fetched again');
 });

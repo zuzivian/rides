@@ -21,24 +21,25 @@ export function save(v) {
 }
 
 /**
- * Names guessed from map labels, keyed by place id (the same ids nicknames
- * use). Each entry holds only the name and the tile zoom it was read at, so a
- * closer look can improve it. No coordinates or ride data.
- * @returns {Record<string, {name: string, z: number}>}
+ * Place names read from OpenFreeMap tiles, keyed by place id (the same ids
+ * nicknames use). Each entry holds only the name, what kind of name it is
+ * (poi, address, street, area) and the tile zoom it came from. No
+ * coordinates or ride data.
+ * @returns {Record<string, {name: string, z: number, kind?: string}>}
  */
 export function loadGuesses() {
   try {
     const v = JSON.parse(localStorage.getItem(GUESS_KEY) || '{}');
-    /** @type {Record<string, {name: string, z: number}>} */
+    /** @type {Record<string, {name: string, z: number, kind?: string}>} */
     const out = {};
-    for (const [id, g] of Object.entries(v || {})) if (g && typeof g.name === 'string' && typeof g.z === 'number') out[id] = { name: g.name.slice(0, 48), z: g.z };
+    for (const [id, g] of Object.entries(v || {})) if (g && typeof g.name === 'string' && typeof g.z === 'number') out[id] = { name: g.name.slice(0, 48), z: g.z, kind: typeof g.kind === 'string' ? g.kind.slice(0, 10) : '' };
     return out;
   } catch {
     return {};
   }
 }
 
-/** @param {Record<string, {name: string, z: number}>} g */
+/** @param {Record<string, {name: string, z: number, kind?: string}>} g */
 export function saveGuesses(g) {
   try { localStorage.setItem(GUESS_KEY, JSON.stringify(g)); } catch { /* keep in memory only */ }
 }

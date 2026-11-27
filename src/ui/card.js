@@ -52,7 +52,7 @@ export function cardSection(s) {
 
 /**
  * Wire up the share card section.
- * @param {HTMLElement} root @param {Trip[]} trips @param {{names: Record<string,string>, guesses?: Record<string,string>, unit: 'mi'|'km'}} opts
+ * @param {HTMLElement} root @param {Trip[]} trips @param {{names: Record<string,string>, guesses?: Record<string, {name: string, kind?: string}>, unit: 'mi'|'km'}} opts
  */
 export function mountCard(root, trips, opts) {
   const canvas = /** @type {HTMLCanvasElement} */ (root.querySelector('canvas'));
