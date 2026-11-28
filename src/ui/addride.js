@@ -78,7 +78,7 @@ export function openAddRide(o) {
     <div class="sheet-frame">
       <header class="sheet-head">
         <div><div class="eyebrow">${commute ? 'Your usual commute' : o.edit ? 'Edit ride' : 'Add a ride'} · <span class="sheet-step">Step 1 of 3</span></div>
-        <h2 id="sheet-title">${esc(labels[step])}</h2></div>
+        <h2 id="sheet-title" aria-live="polite">${esc(labels[step])}</h2></div>
         <button type="button" class="btn btn-ghost btn-small" data-sheet-close aria-label="Close">✕</button>
       </header>
       <div class="sheet-map" data-step-map>
@@ -216,7 +216,20 @@ export function openAddRide(o) {
     prevFocus?.focus?.();
     o.onClose?.();
   };
-  const onKey = (/** @type {KeyboardEvent} */ e) => { if (e.key === 'Escape') { e.preventDefault(); close(); } };
+  const onKey = (/** @type {KeyboardEvent} */ e) => {
+    if (e.key === 'Escape') { e.preventDefault(); close(); return; }
+    if (e.key !== 'Tab') return;
+    // Keep focus inside the dialog.
+    const items = /** @type {HTMLElement[]} */ ([...root.querySelectorAll('a[href], button, input, select, summary, [tabindex="0"]')])
+      .filter((el) => !el.closest('[hidden]') && el.offsetParent !== null && !(/** @type {any} */ (el).disabled)
+        // Content of a closed <details> isn't reachable (Chrome still gives it an offsetParent).
+        && !(el.tagName !== 'SUMMARY' && el.closest('details:not([open])')));
+    if (!items.length) return;
+    const first = items[0]; const last = items[items.length - 1];
+    const active = /** @type {HTMLElement|null} */ (document.activeElement);
+    if (e.shiftKey && (active === first || !root.contains(active))) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && (active === last || !root.contains(active))) { e.preventDefault(); first.focus(); }
+  };
   document.addEventListener('keydown', onKey, true);
 
   root.addEventListener('click', (e) => {

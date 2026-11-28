@@ -56,3 +56,7 @@ A POI or address beats the export's street name; a street or neighbourhood doesn
 **Not done: fetching tiles to name every place.** Fetching the z14 tile around each place up front would name everything at once. It would also tell the tile host, along with the user's IP, which roughly 2 km tiles they ride to, Home and Work included, without their looking there. That conflicts with AGENTS.md rule 1 ("tile numbers for the area on screen"). It's waiting for Nat's decision on an explicit "Guess names for all places" button.
 
 **Priority.** Nickname, then Home/Work/airport, then street address, then map-label guess, then pattern and distance ("Late nights · 2.5 mi E of Home"). When the basemap is off, nothing changes from before.
+
+## 28 Nov 2026: Vendoring MapLibre or adding SRI is still blocked
+
+Nat approved vendoring `maplibre-gl@4.7.1` into `public/vendor/`, or adding an SRI hash. The agent's container still can't reach unpkg.com, cdn.jsdelivr.net or registry.npmjs.org (the proxy returns 403, or there's no response), so it can't get the file to commit or hash it. Per Sinny, it doesn't work around the sandbox. Until someone with network access runs the follow-up above (`openssl dgst -sha384 -binary maplibre-gl.js | openssl base64 -A`, or copying the dist files into `public/vendor/maplibre-gl/`), the script keeps loading from the exact-version unpkg path the CSP pins.
