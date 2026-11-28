@@ -52,13 +52,14 @@ test/                 node:test suites and fixtures
 | Regenerate sample | `npm run sample` (deterministic; CI checks it matches the committed file) |
 | Basemap check (Playwright, fallback + wiring with a stub) | `npm run build && node scripts/check-basemap.cjs` |
 | First-run check (Playwright: add a ride, commute, fallback) | `npm run build && node scripts/check-onboarding.cjs` |
+| Accessibility check (Playwright: contrast, names, keyboard paths, focus trap) | `npm run build && node scripts/check-a11y.cjs` |
 | Everything | `npm run check` |
 
 There are no npm dependencies, so there's no `npm install`.
 
 ## Checking UI changes
 
-Use Playwright (preinstalled in the cloud environment; `require('playwright')`). Serve the app, load it at **390×844** and **1280×800**, click "Try with sample data" (the story opens; add `?sample&nostory` to the URL to skip it). For the first-run flow, use `scripts/check-onboarding.cjs`, fail on any console error, and save screenshots to `docs/screenshots/`. Also check with `reducedMotion: 'reduce'`.
+Use Playwright (preinstalled in the cloud environment; `require('playwright')`). Serve the app, load it at **390×844** and **1280×800**, click "Try with sample data" (the story opens; add `?sample&nostory` to the URL to skip it). For the first-run flow, use `scripts/check-onboarding.cjs`, fail on any console error, and save screenshots to `docs/screenshots/`. Also check with `reducedMotion: 'reduce'`, and run `scripts/check-a11y.cjs`. Text must meet WCAG AA contrast (4.5:1, or 3:1 for large text), so use `--muted` or `--faint` for secondary text, never anything dimmer. Every control needs an accessible name and a keyboard path.
 
 ## Conventions
 

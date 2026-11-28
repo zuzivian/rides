@@ -54,12 +54,12 @@ export function landing(o = {}) {
         <button class="btn btn-primary btn-big" type="button" data-action="add-ride">＋ ${o.manualCount ? 'Add a ride' : 'Add your first ride'}</button>
         <div class="actions-sub">
           ${o.manualCount ? `<button class="link" type="button" data-action="my-rides">See your ${fmt.plural(o.manualCount, 'ride')}</button><span aria-hidden="true">·</span>` : ''}
-          <label class="link" for="file">Import your history</label>
+          <button class="link" type="button" data-action="import">Import your history</button>
           <span aria-hidden="true">·</span>
           <button class="link" type="button" data-action="sample">Try with sample data</button>
         </div>
       </div>
-      <input id="file" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple>
+      <input id="file" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple tabindex="-1" aria-hidden="true">
       <div class="drop">Or drop your <code>trips_data.csv</code>, or receipt emails (<code>.eml</code> / <code>.mbox</code>), anywhere on this page</div>
       <ul class="promises">
         <li>Parsed in your browser. No server, no account, no analytics.</li>
@@ -173,7 +173,7 @@ export function addedSection(s, m, unit) {
         <button class="btn btn-primary btn-small" type="button" data-action="add-ride">＋ Add another ride</button>
         ${hasCommute ? '' : '<button class="btn btn-small" type="button" data-action="add-commute">Add your usual commute (Home ⇄ Work)</button>'}
       </div>
-      ${!m.hasImport && m.all.length >= IMPORT_NUDGE ? `<div class="nudge"><b>Ready for the whole picture?</b> Import your Uber or Lyft history to see every ride you’ve taken, with real distances and fares, your rider type and your year in rides. <label class="link" for="file-added">Import your full history</label><input id="file-added" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple></div>` : ''}
+      ${!m.hasImport && m.all.length >= IMPORT_NUDGE ? `<div class="nudge"><b>Ready for the whole picture?</b> Import your Uber or Lyft history to see every ride you’ve taken, with real distances and fares, your rider type and your year in rides. <button class="link" type="button" data-action="import">Import your full history</button><input id="file-added" class="sr-only" type="file" accept=".csv,.eml,.mbox,.txt,text/csv,message/rfc822" multiple tabindex="-1" aria-hidden="true"></div>` : ''}
       <details class="added-list"${m.all.length <= 3 ? ' open' : ''}>
         <summary>Rides you added (${m.all.length})</summary>
         <ul>

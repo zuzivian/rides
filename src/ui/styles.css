@@ -9,7 +9,7 @@
   --line-soft: #182030;
   --text: #ece7df;
   --muted: #a19b91;
-  --faint: #6c685f;
+  --faint: #908a7e; /* ≥4.5:1 on --ink-0…--ink-2 (WCAG AA body text) */
   --sodium: #ffb547;
   --sodium-hot: #ffd08a;
   --sodium-dim: rgba(255, 181, 71, 0.14);

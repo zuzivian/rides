@@ -251,6 +251,7 @@ app.addEventListener('click', (e) => {
   if (!t) return;
   const action = t.closest('[data-action]')?.getAttribute('data-action');
   if (action === 'sample') { loadSample(); return; }
+  if (action === 'import') { /** @type {HTMLInputElement|null} */ (app.querySelector('input[type=file]'))?.click(); return; }
   if (action === 'add-ride') { addRide('ride'); return; }
   if (action === 'add-commute') { addRide('commute'); return; }
   const editId = t.closest('[data-edit-ride]')?.getAttribute('data-edit-ride');
