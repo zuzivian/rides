@@ -15,10 +15,17 @@ export function parseCsv(text) {
   let inQuotes = false;
   let i = 0;
   const n = text.length;
-  // Sniff the delimiter from the first line: comma, semicolon or tab.
-  const firstLine = text.slice(0, text.indexOf('\n') === -1 ? n : text.indexOf('\n'));
-  const delim = [',', ';', '\t'].reduce((best, d) =>
-    firstLine.split(d).length > firstLine.split(best).length ? d : best, ',');
+  // Sniff the delimiter from the first record: comma, semicolon or tab,
+  // counting only those outside quotes.
+  /** @type {Record<string, number>} */
+  const seen = { ',': 0, ';': 0, '\t': 0 };
+  for (let j = 0, q = false; j < n; j++) {
+    const c = text[j];
+    if (c === '"') q = !q;
+    else if (!q && c === '\n') break;
+    else if (!q && c in seen) seen[c]++;
+  }
+  const delim = [';', '\t'].reduce((best, d) => (seen[d] > seen[best] ? d : best), ',');
 
   while (i < n) {
     const c = text[i];
@@ -53,6 +60,6 @@ export function parseCsv(text) {
 export function toCsv(rows) {
   return rows.map((r) => r.map((v) => {
     const s = v == null ? '' : String(v);
-    return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    return /[",;\t\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   }).join(',')).join('\n') + '\n';
 }

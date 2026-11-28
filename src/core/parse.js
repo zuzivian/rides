@@ -39,7 +39,7 @@ export const ALIASES = {
   fare: ['fareamount', 'originalfarelocal', 'farelocal', 'totalfare', 'total', 'totalcharged', 'totalamount', 'totalcost', 'fare', 'amount', 'cost', 'price', 'ridecost', 'charge', 'farepaid'],
   currency: ['farecurrency', 'currencycode', 'currency', 'farecurrencycode', 'localcurrency'],
   product: ['producttype', 'producttypename', 'productname', 'product', 'ridetype', 'vehicletype', 'servicetype', 'ridemode', 'service', 'ridecategory'],
-  status: ['triporderstatus', 'tripstatus', 'ridestatus', 'status', 'orderstatus', 'state'],
+  status: ['tripororderstatus', 'triporderstatus', 'tripstatus', 'ridestatus', 'status', 'orderstatus', 'state'],
   city: ['city', 'cityname', 'region', 'market'],
 };
 
@@ -65,7 +65,7 @@ export function detectColumns(headers) {
 /** @param {string[]} headers */
 export function detectSource(headers) {
   const n = new Set(headers.map(normHeader));
-  if (n.has('begintriptime') || n.has('begintriplat') || n.has('begintriptimestamplocal') || n.has('triporderstatus') || n.has('producttypename')) return 'uber';
+  if (n.has('begintriptime') || n.has('begintriplat') || n.has('begintriptimestamplocal') || n.has('tripororderstatus') || n.has('triporderstatus') || n.has('producttypename')) return 'uber';
   if (n.has('ridetype') || [...n].some((h) => h.includes('lyft'))) return 'lyft';
   return 'generic';
 }
